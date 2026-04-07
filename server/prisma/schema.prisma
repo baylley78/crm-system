@@ -1,0 +1,714 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+}
+
+enum CustomerStatus {
+  INITIAL
+  PENDING_TAIL_PAYMENT
+  PENDING_SECOND_SALES_ASSIGNMENT
+  SECOND_SALES_FOLLOWING
+  PENDING_LEGAL
+  LEGAL_PROCESSING
+  PENDING_MEDIATION
+  PENDING_THIRD_SALES
+  THIRD_SALES_FOLLOWING
+  COMPLETED_THIRD_SALES
+  MEDIATION_PROCESSING
+  MEDIATION_COMPLETED
+}
+
+enum FirstOrderType {
+  DEPOSIT
+  TAIL
+  FULL
+}
+
+enum FinanceReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum FollowStage {
+  FIRST_SALES
+  SECOND_SALES
+  LEGAL
+  THIRD_SALES
+  MEDIATION
+}
+
+enum SecondSalesResult {
+  SUCCESS
+  FAILED
+}
+
+enum ApprovalType {
+  REIMBURSEMENT
+  LEAVE
+  PUNCH_CARD
+}
+
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ReimbursementPaymentStatus {
+  UNPAID
+  PAID
+}
+
+enum ContractSalesStage {
+  FIRST
+  SECOND
+  THIRD
+}
+
+enum RefundSourceStage {
+  FIRST_SALES
+  SECOND_SALES
+  LEGAL
+  MEDIATION
+  THIRD_SALES
+  CUSTOMER
+}
+
+enum RefundStatus {
+  PENDING_REVIEW
+  PENDING_ASSIGNMENT
+  PROCESSING
+  REJECTED
+  CLOSED
+}
+
+enum RefundAction {
+  CREATE
+  REVIEW_APPROVE
+  REVIEW_REJECT
+  ASSIGN
+  FOLLOW
+  CLOSE
+}
+
+enum DataScope {
+  SELF
+  DEPARTMENT
+  DEPARTMENT_AND_CHILDREN
+  ALL
+}
+
+enum JudicialComplaintHandlingStatus {
+  PENDING
+  PROCESSING
+  HANDLED
+  IGNORED
+}
+
+enum ThirdSalesSourceStage {
+  SECOND_SALES
+  LEGAL
+}
+
+enum LegalCaseStage {
+  ASSISTANT
+  FILING_SPECIALIST
+  PRE_TRIAL
+  CLOSED
+}
+
+model Department {
+  id           Int          @id @default(autoincrement())
+  name         String
+  parentId     Int?
+  sort         Int          @default(0)
+  leaderUserId Int?
+  hrUserId     Int?
+  parent       Department?  @relation("DepartmentTree", fields: [parentId], references: [id])
+  children     Department[] @relation("DepartmentTree")
+  users        User[]
+  refundCases  RefundCase[]
+  leader       User?        @relation("DepartmentLeader", fields: [leaderUserId], references: [id])
+  hrUser       User?        @relation("DepartmentHr", fields: [hrUserId], references: [id])
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([name, parentId])
+}
+
+model Role {
+  id             Int              @id @default(autoincrement())
+  name           String
+  code           String           @unique
+  description    String?
+  customerScope  DataScope        @default(DEPARTMENT)
+  reportScope    DataScope        @default(DEPARTMENT)
+  userManageScope DataScope       @default(SELF)
+  users          User[]
+  permissions    RolePermission[]
+  assignments    RoleAssignment[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+model Permission {
+  id          Int              @id @default(autoincrement())
+  code        String           @unique
+  name        String
+  description String?
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  createdAt    DateTime   @default(now())
+
+  @@id([roleId, permissionId])
+}
+
+model RoleAssignment {
+  roleId    Int
+  userId    Int
+  role      Role     @relation(fields: [roleId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@id([roleId, userId])
+}
+
+model User {
+  id                Int                     @id @default(autoincrement())
+  username          String                  @unique
+  password          String
+  realName          String
+  phone             String?
+  department        String?
+  departmentId      Int?
+  departmentInfo    Department?             @relation(fields: [departmentId], references: [id])
+  ledDepartments    Department[]            @relation("DepartmentLeader")
+  hrDepartments     Department[]            @relation("DepartmentHr")
+  status            UserStatus              @default(PENDING)
+  roleId            Int
+  role              Role                    @relation(fields: [roleId], references: [id])
+  roleAssignments   RoleAssignment[]
+  ownedCustomers    Customer[]              @relation("CurrentOwner")
+  firstSalesOwned   Customer[]              @relation("FirstSalesOwner")
+  secondSalesOwned  Customer[]              @relation("SecondSalesOwner")
+  legalOwned        Customer[]              @relation("LegalOwner")
+  thirdSalesOwned   Customer[]              @relation("ThirdSalesOwner")
+  followLogs        CustomerFollowLog[]
+  firstSalesOrders  FirstSalesOrder[]
+  secondAssignments SecondSalesAssignment[] @relation("AssignedToSecondSales")
+  secondAssignedBy  SecondSalesAssignment[] @relation("AssignedByUser")
+  secondSalesOrders SecondSalesOrder[]
+  mediationCases    MediationCase[]
+  legalCases        LegalCase[]
+  legalAssistantCases LegalCase[]      @relation("LegalAssistantUser")
+  legalFilingCases  LegalCase[]        @relation("LegalFilingSpecialistUser")
+  legalPreTrialCases LegalCase[]       @relation("LegalPreTrialUser")
+  thirdSalesOrders  ThirdSalesOrder[]
+  requestedRefundCases RefundCase[]    @relation("RefundRequestedBy")
+  reviewedRefundCases  RefundCase[]    @relation("RefundReviewedBy")
+  assignedRefundCases  RefundCase[]    @relation("RefundAssignedTo")
+  refundLogs          RefundCaseLog[]
+  appliedApprovals  Approval[]              @relation("Applicant")
+  approvedApprovals Approval[]              @relation("Approver")
+  paidApprovals     Approval[]              @relation("PaidBy")
+  approvalSteps     ApprovalStep[]          @relation("ApprovalStepApprover")
+  financeReviewedOrders   FirstSalesOrder[]       @relation("FirstSalesFinanceReviewer")
+  reviewedSecondSalesOrders SecondSalesOrder[] @relation("SecondSalesFinanceReviewer")
+  reviewedThirdSalesOrders ThirdSalesOrder[] @relation("ThirdSalesFinanceReviewer")
+  qualityRecords         QualityRecord[]
+  submittedComplaintCases JudicialComplaintCase[] @relation("ComplaintSubmittedBy")
+  handledComplaintCases   JudicialComplaintCase[] @relation("ComplaintHandledBy")
+  contractArchives       ContractArchive[] @relation("ContractSpecialist")
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+}
+
+model Customer {
+  id                     Int                      @id @default(autoincrement())
+  customerNo             String                   @unique
+  name                   String
+  phone                  String                   @unique
+  wechat                 String?
+  gender                 String?
+  age                    Int?
+  province               String?
+  city                   String?
+  source                 String?
+  caseType               String?
+  intentionLevel         String?
+  currentStatus          CustomerStatus           @default(INITIAL)
+  currentOwnerId         Int?
+  firstSalesUserId       Int?
+  secondSalesUserId      Int?
+  legalUserId            Int?
+  thirdSalesUserId       Int?
+  thirdSalesSourceStage  ThirdSalesSourceStage?
+  targetAmount           Decimal                  @default(0)
+  firstPaymentAmount     Decimal                  @default(0)
+  secondPaymentAmount    Decimal                  @default(0)
+  thirdPaymentAmount     Decimal                  @default(0)
+  totalPaymentAmount     Decimal                  @default(0)
+  arrearsAmount          Decimal                  @default(0)
+  isTailPaymentCompleted Boolean                  @default(false)
+  firstSalesChatRecordUrl String?
+  remark                 String?
+  currentOwner           User?                    @relation("CurrentOwner", fields: [currentOwnerId], references: [id])
+  firstSalesUser         User?                    @relation("FirstSalesOwner", fields: [firstSalesUserId], references: [id])
+  secondSalesUser        User?                    @relation("SecondSalesOwner", fields: [secondSalesUserId], references: [id])
+  legalUser              User?                    @relation("LegalOwner", fields: [legalUserId], references: [id])
+  thirdSalesUser         User?                    @relation("ThirdSalesOwner", fields: [thirdSalesUserId], references: [id])
+  followLogs             CustomerFollowLog[]
+  firstSalesOrders       FirstSalesOrder[]
+  secondAssignments      SecondSalesAssignment[]
+  secondSalesOrders      SecondSalesOrder[]
+  mediationCases         MediationCase[]
+  legalCases             LegalCase[]
+  thirdSalesOrders       ThirdSalesOrder[]
+  refundCases            RefundCase[]
+  approvals              Approval[]
+  qualityRecords         QualityRecord[]
+  contractArchives      ContractArchive[]
+  complaintCases        JudicialComplaintCase[] @relation("ComplaintCustomer")
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  @@index([currentStatus])
+  @@index([currentOwnerId])
+  @@index([firstSalesUserId])
+  @@index([secondSalesUserId])
+  @@index([legalUserId])
+  @@index([thirdSalesUserId])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model CustomerFollowLog {
+  id             Int       @id @default(autoincrement())
+  customerId     Int
+  operatorId     Int
+  stage          FollowStage
+  content        String
+  nextFollowTime DateTime?
+  customer       Customer  @relation(fields: [customerId], references: [id])
+  operator       User      @relation(fields: [operatorId], references: [id])
+  createdAt      DateTime  @default(now())
+
+  @@index([customerId])
+  @@index([operatorId])
+  @@index([createdAt])
+}
+
+model FirstSalesOrder {
+  id                   Int                 @id @default(autoincrement())
+  customerId           Int
+  salesUserId          Int
+  orderType            FirstOrderType
+  isTimelyDeal         Boolean             @default(true)
+  targetAmount         Decimal             @default(0)
+  contractAmount       Decimal             @default(0)
+  paymentAmount        Decimal             @default(0)
+  arrearsAmount        Decimal             @default(0)
+  paymentAccountId     Int?
+  paymentAccountName   String?
+  paymentSerialNo      String?                @unique
+  paymentScreenshotUrl String?
+  evidenceImageUrls    String?
+  paymentStatus        String?
+  financeReviewStatus  FinanceReviewStatus @default(PENDING)
+  financeReviewerId    Int?
+  financeReviewedAt    DateTime?
+  financeReviewRemark  String?
+  orderDate            DateTime
+  remark               String?
+  customer             Customer            @relation(fields: [customerId], references: [id])
+  salesUser            User                @relation(fields: [salesUserId], references: [id])
+  paymentAccount       PaymentAccount?     @relation(fields: [paymentAccountId], references: [id])
+  financeReviewer      User?               @relation("FirstSalesFinanceReviewer", fields: [financeReviewerId], references: [id])
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@index([customerId])
+  @@index([salesUserId])
+  @@index([orderDate])
+  @@index([createdAt])
+  @@index([financeReviewStatus])
+}
+
+model SecondSalesAssignment {
+  id                Int              @id @default(autoincrement())
+  customerId        Int
+  assignedById      Int
+  secondSalesUserId Int
+  assignedAt        DateTime         @default(now())
+  status            AssignmentStatus @default(ASSIGNED)
+  remark            String?
+  customer          Customer         @relation(fields: [customerId], references: [id])
+  assignedBy        User             @relation("AssignedByUser", fields: [assignedById], references: [id])
+  secondSalesUser   User             @relation("AssignedToSecondSales", fields: [secondSalesUserId], references: [id])
+  secondSalesOrders SecondSalesOrder[]
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([customerId])
+  @@index([secondSalesUserId])
+  @@index([assignedAt])
+  @@index([status])
+}
+
+model SecondSalesOrder {
+  id                   Int                    @id @default(autoincrement())
+  customerId           Int
+  secondSalesUserId    Int
+  assignmentId         Int?
+  secondPaymentAmount  Decimal                @default(0)
+  includesHearing      Boolean                @default(false)
+  hearingCostAmount    Decimal                @default(0)
+  performanceAmount    Decimal                @default(0)
+  paymentAccountId     Int?
+  paymentAccountName   String?
+  paymentSerialNo      String?                @unique
+  paymentScreenshotUrl String?
+  chatRecordUrl        String?
+  evidenceFileUrls     String?
+  remark               String?
+  financeReviewStatus  FinanceReviewStatus    @default(PENDING)
+  financeReviewerId    Int?
+  financeReviewedAt    DateTime?
+  financeReviewRemark  String?
+  orderDate            DateTime
+  customer             Customer               @relation(fields: [customerId], references: [id])
+  secondSalesUser      User                   @relation(fields: [secondSalesUserId], references: [id])
+  assignment           SecondSalesAssignment? @relation(fields: [assignmentId], references: [id])
+  paymentAccount       PaymentAccount?        @relation(fields: [paymentAccountId], references: [id])
+  financeReviewer      User?                  @relation("SecondSalesFinanceReviewer", fields: [financeReviewerId], references: [id])
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@index([customerId])
+  @@index([secondSalesUserId])
+  @@index([orderDate])
+  @@index([createdAt])
+  @@index([financeReviewStatus])
+}
+
+model MediationCase {
+  id               Int       @id @default(autoincrement())
+  customerId       Int
+  ownerId          Int
+  startDate        DateTime  @default(now())
+  progressStatus   String
+  mediationResult  String?
+  finishDate       DateTime?
+  remark           String?
+  evidenceFileUrls String?
+  customer         Customer  @relation(fields: [customerId], references: [id])
+  owner            User      @relation(fields: [ownerId], references: [id])
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([customerId])
+  @@index([ownerId])
+  @@index([createdAt])
+}
+
+model LegalCase {
+  id                     Int             @id @default(autoincrement())
+  customerId             Int
+  legalUserId            Int
+  startDate              DateTime        @default(now())
+  progressStatus         String
+  caseResult             String?
+  filingApproved         Boolean         @default(false)
+  isCompleted            Boolean         @default(false)
+  completedAt            DateTime?
+  remark                 String?
+  stage                  LegalCaseStage  @default(ASSISTANT)
+  assistantUserId        Int?
+  filingSpecialistUserId Int?
+  preTrialUserId         Int?
+  assistantCollected     Boolean         @default(false)
+  assistantDocumented    Boolean         @default(false)
+  archiveNeeded          Boolean         @default(false)
+  archiveCompleted       Boolean         @default(false)
+  filingReviewed         Boolean         @default(false)
+  transferredToPreTrial  Boolean         @default(false)
+  acceptedAt             DateTime?
+  assistantTransferredAt DateTime?
+  filingApprovedAt       DateTime?
+  preTrialTransferredAt  DateTime?
+  closeResult            String?
+  customer               Customer        @relation(fields: [customerId], references: [id])
+  legalUser              User            @relation(fields: [legalUserId], references: [id])
+  assistantUser          User?           @relation("LegalAssistantUser", fields: [assistantUserId], references: [id])
+  filingSpecialistUser   User?           @relation("LegalFilingSpecialistUser", fields: [filingSpecialistUserId], references: [id])
+  preTrialUser           User?           @relation("LegalPreTrialUser", fields: [preTrialUserId], references: [id])
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  @@index([customerId])
+  @@index([legalUserId])
+  @@index([assistantUserId])
+  @@index([filingSpecialistUserId])
+  @@index([preTrialUserId])
+  @@index([stage])
+  @@index([createdAt])
+}
+
+model RefundCase {
+  id                   Int               @id @default(autoincrement())
+  customerId           Int
+  sourceStage          RefundSourceStage
+  relatedOrderId       Int?
+  relatedOrderStage    ContractSalesStage?
+  firstSalesDepartmentId   Int?
+  firstSalesDepartmentName String?
+  firstSalesTeamName       String?
+  requestedById        Int
+  reviewerId           Int?
+  assigneeId           Int?
+  status               RefundStatus      @default(PENDING_REVIEW)
+  reason               String
+  expectedRefundAmount Decimal?          @default(0)
+  remark               String?
+  reviewRemark         String?
+  reviewedAt           DateTime?
+  assignedAt           DateTime?
+  closedAt             DateTime?
+  customer             Customer          @relation(fields: [customerId], references: [id])
+  firstSalesDepartment Department?       @relation(fields: [firstSalesDepartmentId], references: [id])
+  requestedBy          User              @relation("RefundRequestedBy", fields: [requestedById], references: [id])
+  reviewer             User?             @relation("RefundReviewedBy", fields: [reviewerId], references: [id])
+  assignee             User?             @relation("RefundAssignedTo", fields: [assigneeId], references: [id])
+  logs                 RefundCaseLog[]
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  @@index([customerId])
+  @@index([firstSalesDepartmentId])
+  @@index([firstSalesTeamName])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model RefundCaseLog {
+  id           Int          @id @default(autoincrement())
+  refundCaseId Int
+  operatorId   Int
+  action       RefundAction
+  content      String
+  refundCase   RefundCase   @relation(fields: [refundCaseId], references: [id])
+  operator     User         @relation(fields: [operatorId], references: [id])
+  createdAt    DateTime     @default(now())
+}
+
+model JudicialComplaintCase {
+  id                        Int                             @id @default(autoincrement())
+  customerId                Int?
+  submittedById             Int
+  handledById               Int?
+  complaintSubject          String
+  teamName                  String?
+  departmentName            String?
+  complaintTime             DateTime
+  customerName              String
+  phone                     String
+  relationToCustomer        String?
+  firstSignTime             DateTime?
+  secondSignTime            DateTime?
+  firstDealAmount           Decimal                         @default(0)
+  secondDealAmount          Decimal                         @default(0)
+  firstSalesName            String?
+  secondSalesName           String?
+  legalAssistantName        String?
+  summary                   String?
+  complaintReason           String
+  progress                  String?
+  refundAmount              Decimal                         @default(0)
+  intervenedBeforeComplaint Boolean                        @default(false)
+  suddenRefundRequest       Boolean                        @default(false)
+  thirdPartyGuidance        Boolean                        @default(false)
+  shouldHandle              Boolean                        @default(true)
+  handlingStatus            JudicialComplaintHandlingStatus @default(PENDING)
+  handledAt                 DateTime?
+  customer                  Customer?                       @relation("ComplaintCustomer", fields: [customerId], references: [id])
+  submittedBy               User                            @relation("ComplaintSubmittedBy", fields: [submittedById], references: [id])
+  handledBy                 User?                           @relation("ComplaintHandledBy", fields: [handledById], references: [id])
+  createdAt                 DateTime                        @default(now())
+  updatedAt                 DateTime                        @updatedAt
+}
+
+model ThirdSalesOrder {
+  id                  Int                 @id @default(autoincrement())
+  customerId          Int
+  thirdSalesUserId    Int
+  sourceStage         ThirdSalesSourceStage?
+  productName         String
+  paymentAmount       Decimal             @default(0)
+  rawPerformanceAmount Decimal            @default(0)
+  hearingCostAmount   Decimal             @default(0)
+  performanceAmount   Decimal             @default(0)
+  paymentAccountId    Int?
+  paymentAccountName  String?
+  paymentSerialNo     String?             @unique
+  paymentScreenshotUrl String?
+  financeReviewStatus FinanceReviewStatus @default(PENDING)
+  financeReviewerId   Int?
+  financeReviewedAt   DateTime?
+  financeReviewRemark String?
+  orderDate           DateTime
+  remark              String?
+  evidenceFileUrls    String?
+  customer            Customer            @relation(fields: [customerId], references: [id])
+  thirdSalesUser      User                @relation(fields: [thirdSalesUserId], references: [id])
+  paymentAccount      PaymentAccount?     @relation(fields: [paymentAccountId], references: [id])
+  financeReviewer     User?               @relation("ThirdSalesFinanceReviewer", fields: [financeReviewerId], references: [id])
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@index([customerId])
+  @@index([thirdSalesUserId])
+  @@index([orderDate])
+  @@index([createdAt])
+  @@index([financeReviewStatus])
+}
+
+model PaymentAccount {
+  id                Int               @id @default(autoincrement())
+  accountName       String
+  bankName          String?
+  accountNo         String
+  remark            String?
+  isActive          Boolean           @default(true)
+  firstSalesOrders  FirstSalesOrder[]
+  secondSalesOrders SecondSalesOrder[]
+  thirdSalesOrders  ThirdSalesOrder[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model CourtConfig {
+  id          Int      @id @default(autoincrement())
+  hearingCost Decimal  @default(0)
+  remark      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model DingTalkReportConfig {
+  id              Int      @id @default(autoincrement())
+  templateType    String
+  departmentIds   String
+  departmentNames String
+  webhookUrl      String
+  dailyTarget     String?
+  messageTemplate String
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Approval {
+  id                Int                        @id @default(autoincrement())
+  applicantId       Int
+  customerId        Int?
+  approvalType      ApprovalType
+  title             String
+  amount            Decimal?                   @default(0)
+  leaveDays         Decimal?                   @default(0)
+  punchDate         DateTime?
+  punchTime         String?
+  reason            String
+  status            ApprovalStatus             @default(PENDING)
+  paymentStatus     ReimbursementPaymentStatus @default(UNPAID)
+  approverId        Int?
+  paidById          Int?
+  currentStep       Int                        @default(1)
+  maxStep           Int                        @default(1)
+  approvedAt        DateTime?
+  paidAt            DateTime?
+  remark            String?
+  applicant         User                       @relation("Applicant", fields: [applicantId], references: [id])
+  customer          Customer?                  @relation(fields: [customerId], references: [id])
+  approver          User?                      @relation("Approver", fields: [approverId], references: [id])
+  paidBy            User?                      @relation("PaidBy", fields: [paidById], references: [id])
+  steps             ApprovalStep[]
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+}
+
+model ApprovalStep {
+  id          Int            @id @default(autoincrement())
+  approvalId  Int
+  step        Int
+  approverId  Int
+  status      ApprovalStatus @default(PENDING)
+  remark      String?
+  handledAt   DateTime?
+  approval    Approval       @relation(fields: [approvalId], references: [id])
+  approver    User           @relation("ApprovalStepApprover", fields: [approverId], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([approvalId, step])
+}
+
+model QualityRecord {
+  id            Int       @id @default(autoincrement())
+  recordDate    DateTime
+  responsibleId Int
+  customerId    Int?
+  matter        String
+  penaltyAmount Decimal   @default(0)
+  screenshotUrl String?
+  responsible   User      @relation(fields: [responsibleId], references: [id])
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model ContractArchive {
+  id                   Int                @id @default(autoincrement())
+  contractNo           String             @unique
+  customerId           Int
+  salesStage           ContractSalesStage
+  relatedOrderId       Int
+  amount               Decimal            @default(0)
+  signDate             DateTime
+  fileUrl              String?
+  contractSpecialistId Int
+  remark               String?
+  customer             Customer           @relation(fields: [customerId], references: [id])
+  contractSpecialist   User               @relation("ContractSpecialist", fields: [contractSpecialistId], references: [id])
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+}

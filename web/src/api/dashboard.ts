@@ -1,0 +1,169 @@
+import { request } from './request'
+import type {
+  BatchFinanceReviewPayload,
+  DashboardSummary,
+  FinanceReviewActionPayload,
+  FirstSalesCreateResult,
+  FirstSalesForm,
+  FirstSalesListItem,
+  FirstSalesTailOrderPayload,
+  PaymentAccountOption,
+  SalesUserOption,
+} from '../types'
+
+export const fetchDashboardSummary = async () => {
+  const { data } = await request.get<DashboardSummary>('/dashboard/summary')
+  return data
+}
+
+export const fetchFirstSalesUsers = async () => {
+  const { data } = await request.get<SalesUserOption[]>('/first-sales/users')
+  return data
+}
+
+export const fetchFirstSalesOrders = async () => {
+  const { data } = await request.get<FirstSalesListItem[]>('/first-sales/orders')
+  return data
+}
+
+export const fetchPaymentAccountOptionsForSales = async () => {
+  const { data } = await request.get<PaymentAccountOption[]>('/payment-accounts/options')
+  return data
+}
+
+export const createFirstSalesOrder = async (payload: FirstSalesForm) => {
+  const formData = new FormData()
+  formData.append('customerName', payload.customerName)
+  formData.append('phone', payload.phone)
+  formData.append('wechat', payload.wechat || '')
+  formData.append('gender', payload.gender || '')
+  formData.append('age', payload.age === null || payload.age === undefined ? '' : String(payload.age))
+  formData.append('province', payload.province || '')
+  formData.append('city', payload.city || '')
+  formData.append('source', payload.source || '')
+  formData.append('caseType', payload.caseType || '')
+  formData.append('intentionLevel', payload.intentionLevel || '')
+  formData.append('salesUserId', String(payload.salesUserId))
+  formData.append('orderType', payload.orderType)
+  formData.append('isTimelyDeal', payload.isTimelyDeal)
+  formData.append('targetAmount', String(payload.targetAmount))
+  formData.append('contractAmount', String(payload.contractAmount))
+  formData.append('paymentAmount', String(payload.paymentAmount))
+  formData.append('arrearsAmount', String(payload.arrearsAmount))
+  formData.append('paymentAccountId', String(payload.paymentAccountId))
+  formData.append('paymentSerialNo', payload.paymentSerialNo)
+  if (payload.orderDate) {
+    formData.append('orderDate', payload.orderDate)
+  }
+  formData.append('remark', payload.remark || '')
+
+  if (payload.paymentScreenshot) {
+    formData.append('paymentScreenshot', payload.paymentScreenshot)
+  }
+
+  if (payload.chatRecordFile) {
+    formData.append('chatRecordFile', payload.chatRecordFile)
+  }
+
+  payload.evidenceImages?.forEach((file) => {
+    formData.append('evidenceImages', file)
+  })
+
+  const { data } = await request.post<FirstSalesCreateResult>('/first-sales/orders', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return data
+}
+
+export const updateFirstSalesOrder = async (id: number, payload: FirstSalesForm) => {
+  const formData = new FormData()
+  formData.append('customerName', payload.customerName)
+  formData.append('phone', payload.phone)
+  formData.append('wechat', payload.wechat || '')
+  formData.append('gender', payload.gender || '')
+  formData.append('age', payload.age === null || payload.age === undefined ? '' : String(payload.age))
+  formData.append('province', payload.province || '')
+  formData.append('city', payload.city || '')
+  formData.append('source', payload.source || '')
+  formData.append('caseType', payload.caseType || '')
+  formData.append('intentionLevel', payload.intentionLevel || '')
+  formData.append('salesUserId', String(payload.salesUserId))
+  formData.append('orderType', payload.orderType)
+  formData.append('isTimelyDeal', payload.isTimelyDeal)
+  formData.append('targetAmount', String(payload.targetAmount))
+  formData.append('contractAmount', String(payload.contractAmount))
+  formData.append('paymentAmount', String(payload.paymentAmount))
+  formData.append('arrearsAmount', String(payload.arrearsAmount))
+  formData.append('paymentAccountId', String(payload.paymentAccountId))
+  formData.append('paymentSerialNo', payload.paymentSerialNo)
+  if (payload.orderDate) {
+    formData.append('orderDate', payload.orderDate)
+  }
+  formData.append('remark', payload.remark || '')
+
+  if (payload.paymentScreenshot) {
+    formData.append('paymentScreenshot', payload.paymentScreenshot)
+  }
+
+  if (payload.chatRecordFile) {
+    formData.append('chatRecordFile', payload.chatRecordFile)
+  }
+
+  payload.evidenceImages?.forEach((file) => {
+    formData.append('evidenceImages', file)
+  })
+
+  const { data } = await request.patch<FirstSalesListItem>(`/first-sales/orders/${id}`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return data
+}
+
+export const createFirstSalesTailOrder = async (customerId: number, payload: FirstSalesTailOrderPayload) => {
+  const formData = new FormData()
+  formData.append('salesUserId', String(payload.salesUserId))
+  formData.append('isTimelyDeal', payload.isTimelyDeal)
+  formData.append('targetAmount', String(payload.targetAmount))
+  formData.append('contractAmount', String(payload.contractAmount))
+  formData.append('paymentAmount', String(payload.paymentAmount))
+  formData.append('arrearsAmount', String(payload.arrearsAmount))
+  formData.append('paymentAccountId', String(payload.paymentAccountId))
+  formData.append('paymentSerialNo', payload.paymentSerialNo)
+  if (payload.orderDate) {
+    formData.append('orderDate', payload.orderDate)
+  }
+  formData.append('remark', payload.remark || '')
+
+  if (payload.paymentScreenshot) {
+    formData.append('paymentScreenshot', payload.paymentScreenshot)
+  }
+
+  if (payload.chatRecordFile) {
+    formData.append('chatRecordFile', payload.chatRecordFile)
+  }
+
+  payload.evidenceImages?.forEach((file) => {
+    formData.append('evidenceImages', file)
+  })
+
+  const { data } = await request.post(`/first-sales/customers/${customerId}/tail-order`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return data
+}
+
+export const reviewFirstSalesOrder = async (id: number, payload: FinanceReviewActionPayload) => {
+  const { data } = await request.post<FirstSalesListItem>(`/first-sales/orders/${id}/finance-review`, payload)
+  return data
+}
+
+export const batchReviewFirstSalesOrders = async (payload: BatchFinanceReviewPayload) => {
+  const { data } = await request.post<FirstSalesListItem[]>('/first-sales/orders/finance-review/batch', payload)
+  return data
+}

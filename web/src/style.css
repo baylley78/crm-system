@@ -1,0 +1,224 @@
+:root {
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  color: #1f2329;
+  background: #f3f6fb;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 1280px;
+  background: #f3f6fb;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0f172a, #1d4ed8);
+}
+
+.login-card {
+  width: 420px;
+  border-radius: 16px;
+}
+
+.login-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.login-subtitle {
+  margin: 8px 0 24px;
+  color: #6b7280;
+}
+
+.layout-shell {
+  min-height: 100vh;
+}
+
+.layout-aside {
+  background: #001529;
+  color: #fff;
+}
+
+.brand {
+  height: 60px;
+  line-height: 60px;
+  padding-left: 20px;
+  font-size: 18px;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.menu {
+  border-right: none;
+}
+
+.layout-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-panel {
+  text-align: right;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.user-role {
+  font-size: 12px;
+  color: #909399;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+.layout-main {
+  padding: 14px;
+}
+
+.page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.page-stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card-header-row,
+.filters-row,
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filters-row {
+  justify-content: flex-start;
+}
+
+.stat-grid,
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stat-label {
+  color: #909399;
+  font-size: 13px;
+}
+
+.stat-value {
+  margin-top: 8px;
+  font-size: 24px;
+  font-weight: 700;
+  color: #303133;
+}
+
+.todo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.todo-card {
+  padding: 16px;
+  border-radius: 10px;
+  background: #f7f9fc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tips-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #606266;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.table-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.list-feedback {
+  margin-top: 4px;
+}
+
+:where(.el-card) {
+  border: 1px solid #e7edf5;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+:where(.el-card.is-never-shadow) {
+  box-shadow: none;
+}
+
+:where(.el-card__header) {
+  padding: 14px 18px;
+}
+
+:where(.el-card__body) {
+  padding: 18px;
+}
+
+:where(.el-alert) {
+  border-radius: 10px;
+}
+
+:where(.el-table) {
+  --el-table-border-color: #eef2f7;
+}
+
