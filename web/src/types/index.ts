@@ -1189,10 +1189,10 @@ export interface SecondSalesOrderListItem {
 
 export interface SecondSalesOrderPayload {
   phone: string
-  secondSalesUserId: number
+  secondSalesUserId?: number
   secondPaymentAmount: number
   includesHearing: boolean
-  paymentAccountId: number
+  paymentAccountId?: number
   paymentSerialNo: string
   nextStage: 'LEGAL' | 'THIRD_SALES'
   orderDate?: string

@@ -498,7 +498,7 @@ defineExpose({ openForCustomer, openForEdit })
         <el-form label-position="top" class="page-stack form-stack">
           <div class="form-grid compact-grid">
             <el-form-item label="二销人员">
-              <el-select v-model="form.secondSalesUserId" placeholder="请选择二销人员">
+              <el-select v-model="form.secondSalesUserId" placeholder="请选择二销人员" clearable>
                 <el-option v-if="!users.length && authStorage.getUser()?.id" :label="authStorage.getUser()?.realName || '当前登录人'" :value="authStorage.getUser()!.id" />
                 <el-option v-for="item in users" :key="item.id" :label="item.realName" :value="item.id" />
               </el-select>
@@ -521,7 +521,7 @@ defineExpose({ openForCustomer, openForEdit })
           </div>
 
           <el-form-item label="收款账户">
-            <el-select v-model="form.paymentAccountId" placeholder="请选择收款账户" filterable>
+            <el-select v-model="form.paymentAccountId" placeholder="请选择收款账户" filterable clearable>
               <el-option v-for="item in paymentAccounts" :key="item.id" :label="`${item.accountName}（${item.accountNo}）`" :value="item.id" />
             </el-select>
           </el-form-item>
