@@ -80,12 +80,12 @@ export class SecondSalesController {
         firstSalesUser: true,
         secondSalesUser: true,
         firstSalesOrders: {
-          select: {
-            paymentScreenshotUrl: true,
-            chatRecordUrl: true,
-            evidenceImageUrls: true,
-            createdAt: true,
-          },
+       select: {
+  paymentScreenshotUrl: true,
+  evidenceImageUrls: true,
+  createdAt: true,
+},
+
           orderBy: { createdAt: 'desc' },
         },
       },
@@ -100,12 +100,7 @@ export class SecondSalesController {
             result.push({ label: '一销付款截图', url: accessUrl, source: 'FIRST_SALES' })
           }
         }
-        if (item.chatRecordUrl) {
-          const accessUrl = this.filesService.toAccessUrl(item.chatRecordUrl)
-          if (accessUrl) {
-            result.push({ label: '一销聊天记录', url: accessUrl, source: 'FIRST_SALES' })
-          }
-        }
+       
         for (const url of this.filesService.toAccessUrls(this.filesService.parseJsonFileUrls(item.evidenceImageUrls))) {
           result.push({ label: '一销证据', url, source: 'FIRST_SALES' })
         }
