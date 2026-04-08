@@ -131,6 +131,7 @@ export const BUILT_IN_PERMISSION_DEFINITIONS: BuiltInPermissionDefinition[] = [
   { code: 'system.departments.delete', name: '删除部门' },
   { code: 'system.departments.manage', name: '管理部门' },
   { code: 'system.paymentAccounts.manage', name: '管理收款配置' },
+  { code: 'system.courtConfig.view', name: '查看开庭配置' },
   { code: 'system.courtConfig.manage', name: '管理开庭配置' },
   { code: 'system.dingTalkReports.manage', name: '管理钉钉报单' },
   { code: 'system.roles.manage', name: '管理角色权限' },
@@ -193,6 +194,7 @@ const secondSalesPermissionCodes = [
   'secondSales.time.edit',
   'secondSales.review.single',
   'secondSales.export',
+  'system.courtConfig.view',
 ]
 const thirdSalesPermissionCodes = [
   'customers.phone.unmask.self',

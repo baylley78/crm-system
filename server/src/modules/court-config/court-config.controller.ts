@@ -11,7 +11,7 @@ export class CourtConfigController {
   constructor(private readonly courtConfigService: CourtConfigService) {}
 
   @Get()
-  @RequirePermission('system.courtConfig.manage')
+  @RequirePermission('system.courtConfig.view')
   getConfig() {
     return this.courtConfigService.getConfig()
   }
