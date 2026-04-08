@@ -36,10 +36,10 @@ const hearingCost = ref(0)
 
 const initialForm = (): SecondSalesOrderPayload => ({
   phone: '',
-  secondSalesUserId: 0,
+  secondSalesUserId: undefined as unknown as number,
   secondPaymentAmount: 0,
   includesHearing: false,
-  paymentAccountId: 0,
+  paymentAccountId: undefined as unknown as number,
   paymentSerialNo: '',
   nextStage: 'LEGAL',
   orderDate: '',
@@ -88,8 +88,8 @@ const openAttachment = (url?: string) => {
 const assignDefaultSecondSalesUser = () => {
   const currentUser = authStorage.getUser()
   const preferredId = currentCustomer.value?.secondSalesUserName ? users.value.find((item) => item.realName === currentCustomer.value?.secondSalesUserName)?.id : undefined
-  const currentUserId = users.value.find((item) => item.id === currentUser?.id)?.id
-  form.secondSalesUserId = preferredId || currentUserId || users.value[0]?.id || 0
+  const currentUserId = currentUser?.id
+  form.secondSalesUserId = preferredId || currentUserId || users.value[0]?.id || undefined
 }
 
 const resetForm = () => {
@@ -122,10 +122,10 @@ const fillFormForEdit = (order: SecondSalesOrderListItem) => {
   }
   form.phone = order.phone
   form.customerName = order.customerName
-  form.secondSalesUserId = order.secondSalesUserId || users.value.find((item) => item.realName === order.secondSalesUserName)?.id || users.value[0]?.id || 0
+  form.secondSalesUserId = order.secondSalesUserId || users.value.find((item) => item.realName === order.secondSalesUserName)?.id || authStorage.getUser()?.id || users.value[0]?.id || undefined
   form.secondPaymentAmount = order.secondPaymentAmount
   form.includesHearing = order.includesHearing
-  form.paymentAccountId = order.paymentAccountId || paymentAccounts.value[0]?.id || 0
+  form.paymentAccountId = order.paymentAccountId || paymentAccounts.value[0]?.id || undefined
   form.paymentSerialNo = order.paymentSerialNo || ''
   form.nextStage = order.currentStatus === 'PENDING_THIRD_SALES' ? 'THIRD_SALES' : 'LEGAL'
   form.orderDate = order.orderDate ? order.orderDate.slice(0, 16) : ''
@@ -162,17 +162,29 @@ const fillFormForEdit = (order: SecondSalesOrderListItem) => {
 }
 
 const loadUsers = async () => {
-  const [paymentAccountList, courtConfig, userList] = await Promise.all([
-    fetchPaymentAccountOptions(),
-    fetchCourtConfig(),
-    canViewSecondSalesUsers() ? fetchSecondSalesUsers() : Promise.resolve([] as SalesUserOption[]),
-  ])
-  users.value = userList
-  paymentAccounts.value = paymentAccountList
-  hearingCost.value = courtConfig.hearingCost || 0
-  assignDefaultSecondSalesUser()
-  if (!form.paymentAccountId) {
-    form.paymentAccountId = paymentAccounts.value[0]?.id || 0
+  try {
+    const [paymentAccountList, courtConfig, userList] = await Promise.all([
+      fetchPaymentAccountOptions(),
+      fetchCourtConfig(),
+      canViewSecondSalesUsers() ? fetchSecondSalesUsers() : Promise.resolve([] as SalesUserOption[]),
+    ])
+    users.value = userList
+    paymentAccounts.value = paymentAccountList
+    hearingCost.value = courtConfig.hearingCost || 0
+    assignDefaultSecondSalesUser()
+    if (!form.paymentAccountId) {
+      form.paymentAccountId = paymentAccounts.value[0]?.id || undefined
+    }
+    if (!paymentAccounts.value.length) {
+      ElMessage.warning('暂无可用收款账户，请联系管理员先启用收款账户')
+    }
+  } catch {
+    users.value = []
+    paymentAccounts.value = []
+    hearingCost.value = 0
+    form.paymentAccountId = undefined
+    assignDefaultSecondSalesUser()
+    ElMessage.error('二销人员或收款账户加载失败，请刷新后重试')
   }
 }
 
@@ -487,6 +499,7 @@ defineExpose({ openForCustomer, openForEdit })
           <div class="form-grid compact-grid">
             <el-form-item label="二销人员">
               <el-select v-model="form.secondSalesUserId" placeholder="请选择二销人员">
+                <el-option v-if="!users.length && authStorage.getUser()?.id" :label="authStorage.getUser()?.realName || '当前登录人'" :value="authStorage.getUser()!.id" />
                 <el-option v-for="item in users" :key="item.id" :label="item.realName" :value="item.id" />
               </el-select>
             </el-form-item>
