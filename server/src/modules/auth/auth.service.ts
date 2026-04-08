@@ -257,7 +257,6 @@ export class AuthService {
         _count: {
           select: {
             users: true,
-            assignments: true,
           },
         },
       },
@@ -268,11 +267,15 @@ export class AuthService {
 
     this.ensureRoleDeletable(role)
 
-    if (role._count.users || role._count.assignments) {
+    if (role._count.users) {
       throw new BadRequestException('该角色下仍有关联人员，请先迁移人员后再删除')
     }
 
-    await this.prisma.role.delete({ where: { id: roleId } })
+    await this.prisma.$transaction(async (tx) => {
+      await tx.roleAssignment.deleteMany({ where: { roleId } })
+      await tx.rolePermission.deleteMany({ where: { roleId } })
+      await tx.role.delete({ where: { id: roleId } })
+    })
 
     return { success: true }
   }
