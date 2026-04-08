@@ -626,19 +626,27 @@ export class AuthService {
 
     const deletionBlockReason = await this.getUserDeletionBlockReason(id)
     if (deletionBlockReason) {
-      throw new BadRequestException(deletionBlockReason)
+      await this.prisma.user.update({
+        where: { id },
+        data: { status: UserStatus.DISABLED },
+      })
+      return { success: true, archived: true, message: '该用户已有业务数据，已自动改为离职' }
     }
 
     try {
       await this.prisma.user.delete({ where: { id } })
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-        throw new BadRequestException('该用户已有关联业务数据，无法删除，请先改为离职')
+        await this.prisma.user.update({
+          where: { id },
+          data: { status: UserStatus.DISABLED },
+        })
+        return { success: true, archived: true, message: '该用户已有业务数据，已自动改为离职' }
       }
       throw error
     }
 
-    return { success: true }
+    return { success: true, archived: false }
   }
 
   async updateUsersStatusBatch(currentUser: AuthenticatedUser, dto: BatchUpdateUserStatusDto) {
