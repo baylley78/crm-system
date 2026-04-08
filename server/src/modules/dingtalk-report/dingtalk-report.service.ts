@@ -81,6 +81,7 @@ export class DingTalkReportService {
 
   async notifyNewPerformance(payload: PerformanceNotificationPayload) {
     if (!payload.departmentId) {
+      this.logger.warn(`钉钉报单跳过：缺少部门ID / ${payload.stage} / ${payload.customerName}`)
       return
     }
 
@@ -95,10 +96,14 @@ export class DingTalkReportService {
 
     const matchedConfigs = configs.filter((item) => this.parseNumberArray(item.departmentIds).includes(payload.departmentId!))
     if (!matchedConfigs.length) {
+      this.logger.warn(`钉钉报单跳过：未匹配到配置 / ${payload.stage} / 部门${payload.departmentId} / ${payload.customerName}`)
       return
     }
 
+    this.logger.log(`钉钉报单开始发送：${payload.stage} / 部门${payload.departmentId} / ${payload.customerName} / 命中${matchedConfigs.length}条配置`)
+
     const contentByConfig = matchedConfigs.map((config) => ({
+      configId: config.id,
       webhookUrl: config.webhookUrl,
       content: this.renderTemplate(config.messageTemplate, payload, {
         dailyTarget: config.dailyTarget,
@@ -108,11 +113,12 @@ export class DingTalkReportService {
     await Promise.all(
       contentByConfig.map(async (config) => {
         if (!config.webhookUrl.trim()) {
+          this.logger.warn(`钉钉报单跳过：配置${config.configId} 未填写 webhook`)
           return
         }
 
         try {
-          await fetch(config.webhookUrl, {
+          const response = await fetch(config.webhookUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -124,8 +130,16 @@ export class DingTalkReportService {
               },
             }),
           })
+
+          const responseText = await response.text()
+          if (!response.ok) {
+            this.logger.error(`钉钉报单发送失败：配置${config.configId} / HTTP ${response.status} ${response.statusText} / 响应: ${responseText}`)
+            return
+          }
+
+          this.logger.log(`钉钉报单发送完成：配置${config.configId} / 响应: ${responseText}`)
         } catch (error) {
-          this.logger.error(`钉钉报单发送失败: ${payload.stage} / ${payload.customerName}`, error instanceof Error ? error.stack : String(error))
+          this.logger.error(`钉钉报单发送异常: ${payload.stage} / ${payload.customerName}`, error instanceof Error ? error.stack : String(error))
         }
       }),
     )
