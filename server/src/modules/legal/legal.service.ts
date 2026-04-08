@@ -198,7 +198,7 @@ export class LegalService {
     }
 
     const latestCase = customer.legalCases[0]
-    this.assertSavePermissions(currentUser, dto)
+    this.assertSavePermissions(currentUser, dto, latestCase)
 
     const startDate = this.resolveStartDate(currentUser, dto.startDate, latestCase?.startDate)
     const stage = dto.stage ?? latestCase?.stage ?? LegalCaseStage.ASSISTANT
@@ -318,39 +318,51 @@ export class LegalService {
     return { success: true }
   }
 
-  private assertSavePermissions(currentUser: AuthenticatedUser, dto: SaveLegalCaseDto) {
+  private assertSavePermissions(currentUser: AuthenticatedUser, dto: SaveLegalCaseDto, latestCase?: {
+    assistantUserId?: number | null
+    filingSpecialistUserId?: number | null
+    preTrialUserId?: number | null
+    filingReviewed?: boolean | null
+    filingApproved?: boolean | null
+    transferredToPreTrial?: boolean | null
+    isCompleted?: boolean | null
+    closeResult?: string | null
+    stage?: LegalCaseStage | null
+  } | null) {
     const permissions = new Set(currentUser.permissions || [])
+    const currentStage = latestCase?.stage ?? LegalCaseStage.ASSISTANT
 
     const changedAssignment =
-      dto.assistantUserId !== undefined ||
-      dto.filingSpecialistUserId !== undefined ||
-      dto.preTrialUserId !== undefined
+      (dto.assistantUserId !== undefined && dto.assistantUserId !== (latestCase?.assistantUserId ?? undefined)) ||
+      (dto.filingSpecialistUserId !== undefined && dto.filingSpecialistUserId !== (latestCase?.filingSpecialistUserId ?? undefined)) ||
+      (dto.preTrialUserId !== undefined && dto.preTrialUserId !== (latestCase?.preTrialUserId ?? undefined))
 
     if (changedAssignment && !permissions.has(LEGAL_ASSIGN_PERMISSION)) {
       throw new BadRequestException('无权分派法务岗位')
     }
 
+    const nextStage = dto.stage ?? currentStage
     const changedFilingReview =
-      dto.filingReviewed !== undefined ||
-      dto.filingApproved !== undefined ||
-      dto.stage === LegalCaseStage.FILING_SPECIALIST
+      (dto.filingReviewed !== undefined && dto.filingReviewed !== (latestCase?.filingReviewed ?? false)) ||
+      (dto.filingApproved !== undefined && dto.filingApproved !== (latestCase?.filingApproved ?? false)) ||
+      (dto.stage !== undefined && currentStage !== LegalCaseStage.FILING_SPECIALIST && nextStage === LegalCaseStage.FILING_SPECIALIST)
 
     if (changedFilingReview && !permissions.has(LEGAL_FILING_REVIEW_PERMISSION)) {
       throw new BadRequestException('无权执行立案审核操作')
     }
 
     const changedPreTrial =
-      dto.transferredToPreTrial !== undefined ||
-      dto.stage === LegalCaseStage.PRE_TRIAL
+      (dto.transferredToPreTrial !== undefined && dto.transferredToPreTrial !== (latestCase?.transferredToPreTrial ?? false)) ||
+      (dto.stage !== undefined && currentStage !== LegalCaseStage.PRE_TRIAL && nextStage === LegalCaseStage.PRE_TRIAL)
 
     if (changedPreTrial && !permissions.has(LEGAL_PRETRIAL_HANDLE_PERMISSION)) {
       throw new BadRequestException('无权处理庭前阶段')
     }
 
     const changedClose =
-      dto.isCompleted !== undefined ||
-      dto.closeResult !== undefined ||
-      dto.stage === LegalCaseStage.CLOSED
+      (dto.isCompleted !== undefined && dto.isCompleted !== (latestCase?.isCompleted ?? false)) ||
+      (dto.closeResult !== undefined && dto.closeResult !== (latestCase?.closeResult ?? '')) ||
+      (dto.stage !== undefined && currentStage !== LegalCaseStage.CLOSED && nextStage === LegalCaseStage.CLOSED)
 
     if (changedClose && !permissions.has(LEGAL_CLOSE_PERMISSION)) {
       throw new BadRequestException('无权执行法务结案操作')

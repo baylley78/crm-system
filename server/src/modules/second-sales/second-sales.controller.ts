@@ -10,6 +10,7 @@ import type { AuthenticatedUser } from '../auth/auth.service'
 import { DashboardService } from '../dashboard/dashboard.service'
 import { PrismaService } from '../../prisma/prisma.service'
 import { CustomersService } from '../customers/customers.service'
+import { FilesService } from '../files/files.service'
 import { SearchCustomerByPhoneDto, AssignSecondSalesDto, CreateSecondSalesOrderDto, TransferToMediationDto } from './dto/second-sales.dto'
 import { CustomerStatus } from '@prisma/client'
 import { SecondSalesService } from './second-sales.service'
@@ -54,6 +55,7 @@ export class SecondSalesController {
     private readonly customersService: CustomersService,
     private readonly dashboardService: DashboardService,
     private readonly secondSalesService: SecondSalesService,
+    private readonly filesService: FilesService,
   ) {}
 
   @Get('assignments')
@@ -74,29 +76,62 @@ export class SecondSalesController {
           ],
         },
       },
-      include: { firstSalesUser: true, secondSalesUser: true },
-      orderBy: { createdAt: 'desc' },
+      include: {
+        firstSalesUser: true,
+        secondSalesUser: true,
+        firstSalesOrders: {
+          select: {
+            paymentScreenshotUrl: true,
+            chatRecordUrl: true,
+            evidenceImageUrls: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
     })
 
-    return customers.map((customer) => ({
-      id: customer.id,
-      customerNo: customer.customerNo,
-      name: customer.name,
-      phone: customer.phone,
-      currentOwnerId: customer.currentOwnerId ?? undefined,
-      firstSalesUserId: customer.firstSalesUserId ?? undefined,
-      secondSalesUserId: customer.secondSalesUserId ?? undefined,
-      legalUserId: customer.legalUserId ?? undefined,
-      thirdSalesUserId: customer.thirdSalesUserId ?? undefined,
-      firstSalesUserName: customer.firstSalesUser?.realName,
-      secondSalesUserName: customer.secondSalesUser?.realName,
-      firstPaymentAmount: Number(customer.firstPaymentAmount),
-      arrearsAmount: Number(customer.arrearsAmount),
-      remark: customer.remark,
-      firstSalesRemark: customer.remark,
-      firstSalesEvidence: [],
-      currentStatus: customer.currentStatus,
-    }))
+    return customers.map((customer) => {
+      const firstSalesEvidence = customer.firstSalesOrders.flatMap((item) => {
+        const result: Array<{ label: string; url: string; source: 'FIRST_SALES' }> = []
+        if (item.paymentScreenshotUrl) {
+          const accessUrl = this.filesService.toAccessUrl(item.paymentScreenshotUrl)
+          if (accessUrl) {
+            result.push({ label: '一销付款截图', url: accessUrl, source: 'FIRST_SALES' })
+          }
+        }
+        if (item.chatRecordUrl) {
+          const accessUrl = this.filesService.toAccessUrl(item.chatRecordUrl)
+          if (accessUrl) {
+            result.push({ label: '一销聊天记录', url: accessUrl, source: 'FIRST_SALES' })
+          }
+        }
+        for (const url of this.filesService.toAccessUrls(this.filesService.parseJsonFileUrls(item.evidenceImageUrls))) {
+          result.push({ label: '一销证据', url, source: 'FIRST_SALES' })
+        }
+        return result
+      })
+
+      return {
+        id: customer.id,
+        customerNo: customer.customerNo,
+        name: customer.name,
+        phone: customer.phone,
+        currentOwnerId: customer.currentOwnerId ?? undefined,
+        firstSalesUserId: customer.firstSalesUserId ?? undefined,
+        secondSalesUserId: customer.secondSalesUserId ?? undefined,
+        legalUserId: customer.legalUserId ?? undefined,
+        thirdSalesUserId: customer.thirdSalesUserId ?? undefined,
+        firstSalesUserName: customer.firstSalesUser?.realName,
+        secondSalesUserName: customer.secondSalesUser?.realName,
+        firstPaymentAmount: Number(customer.firstPaymentAmount),
+        arrearsAmount: Number(customer.arrearsAmount),
+        remark: customer.remark,
+        firstSalesRemark: customer.remark,
+        firstSalesEvidence,
+        currentStatus: customer.currentStatus,
+      }
+    })
   }
 
   @Get('users')

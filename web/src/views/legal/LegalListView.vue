@@ -18,7 +18,7 @@ const canDeleteCustomers = () => hasPermission('customers.delete')
 const canAssignLegal = () => hasPermission('legal.assign')
 const canReviewFiling = () => hasPermission('legal.filing.review')
 const canHandlePreTrial = () => hasPermission('legal.pretrial.handle')
-const canCloseLegal = () => hasPermission('legal.close')
+const canOperateLegal = () => canEditLegal() || canAssignLegal() || canReviewFiling() || canHandlePreTrial() || canCloseLegal()
 
 const stageOptions: Array<{ label: string; value: LegalCaseStage }> = [
   { label: '助理阶段', value: 'ASSISTANT' },
@@ -134,7 +134,8 @@ const legalActionLabel = computed(() => {
   if (canHandlePreTrial()) return '庭前处理'
   if (canReviewFiling()) return '立案审核'
   if (canAssignLegal()) return '分派办理'
-  return '跟进记录'
+  if (canEditLegal()) return '跟进记录'
+  return '查看详情'
 })
 
 const legalActionTip = computed(() => {
@@ -142,7 +143,8 @@ const legalActionTip = computed(() => {
   if (canHandlePreTrial()) return '可办理庭前阶段，并维护前序法务信息'
   if (canReviewFiling()) return '可审核资料、标记立案通过，并维护前序法务信息'
   if (canAssignLegal()) return '可分派助理、立案专员、庭前负责人，并维护案件进度'
-  return '可登记本人负责的法务跟进信息'
+  if (canEditLegal()) return '可登记本人负责的法务跟进信息'
+  return '可查看法务案件详情'
 })
 
 const transferToThirdSales = async (item: LegalCaseItem) => {
@@ -240,7 +242,7 @@ onMounted(loadData)
             <el-table-column label="法务进度" prop="progressStatus" min-width="140" />
             <el-table-column label="操作" width="320">
               <template #default="scope">
-                <el-tooltip v-if="canEditLegal()" :content="legalActionTip" placement="top">
+                <el-tooltip v-if="canOperateLegal()" :content="legalActionTip" placement="top">
                   <el-button link type="primary" @click="openDialog(scope.row)">{{ legalActionLabel }}</el-button>
                 </el-tooltip>
                 <el-button v-if="canCreateRefund()" link type="danger" :loading="refundingId === scope.row.customerId" @click="quickCreateRefund(scope.row)">发起退款</el-button>

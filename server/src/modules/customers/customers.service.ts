@@ -377,12 +377,18 @@ export class CustomersService {
     const firstSalesEvidence = customer.firstSalesOrders.flatMap((item: any) => {
       const result = [] as Array<{ label: string; url: string; source: 'FIRST_SALES' | 'SECOND_SALES' | 'MEDIATION' | 'THIRD_SALES' }>
       if (item.paymentScreenshotUrl) {
-        result.push({ label: '一销付款截图', url: item.paymentScreenshotUrl, source: 'FIRST_SALES' })
+        const accessUrl = this.filesService.toAccessUrl(item.paymentScreenshotUrl)
+        if (accessUrl) {
+          result.push({ label: '一销付款截图', url: accessUrl, source: 'FIRST_SALES' })
+        }
       }
       if (item.chatRecordUrl) {
-        result.push({ label: '一销聊天记录', url: item.chatRecordUrl, source: 'FIRST_SALES' })
+        const accessUrl = this.filesService.toAccessUrl(item.chatRecordUrl)
+        if (accessUrl) {
+          result.push({ label: '一销聊天记录', url: accessUrl, source: 'FIRST_SALES' })
+        }
       }
-      for (const url of this.filesService.parseJsonFileUrls(item.evidenceImageUrls)) {
+      for (const url of this.filesService.toAccessUrls(this.filesService.parseJsonFileUrls(item.evidenceImageUrls))) {
         result.push({ label: '一销证据', url, source: 'FIRST_SALES' })
       }
       return result
@@ -391,25 +397,31 @@ export class CustomersService {
     const secondSalesEvidence = customer.secondSalesOrders.flatMap((item: any) => {
       const result = [] as Array<{ label: string; url: string; source: 'FIRST_SALES' | 'SECOND_SALES' | 'MEDIATION' | 'THIRD_SALES' }>
       if (item.paymentScreenshotUrl) {
-        result.push({ label: '二销付款截图', url: item.paymentScreenshotUrl, source: 'SECOND_SALES' })
+        const accessUrl = this.filesService.toAccessUrl(item.paymentScreenshotUrl)
+        if (accessUrl) {
+          result.push({ label: '二销付款截图', url: accessUrl, source: 'SECOND_SALES' })
+        }
       }
       if (item.chatRecordUrl) {
-        result.push({ label: '二销聊天记录', url: item.chatRecordUrl, source: 'SECOND_SALES' })
+        const accessUrl = this.filesService.toAccessUrl(item.chatRecordUrl)
+        if (accessUrl) {
+          result.push({ label: '二销聊天记录', url: accessUrl, source: 'SECOND_SALES' })
+        }
       }
-      for (const url of this.filesService.parseJsonFileUrls(item.evidenceFileUrls)) {
+      for (const url of this.filesService.toAccessUrls(this.filesService.parseJsonFileUrls(item.evidenceFileUrls))) {
         result.push({ label: '二销证据', url, source: 'SECOND_SALES' })
       }
       return result
     })
 
-    const mediationEvidence = this.filesService.parseJsonFileUrls(latestMediationCase?.evidenceFileUrls).map((url) => ({
+    const mediationEvidence = this.filesService.toAccessUrls(this.filesService.parseJsonFileUrls(latestMediationCase?.evidenceFileUrls)).map((url) => ({
       label: '调解证据',
       url,
       source: 'MEDIATION' as const,
     }))
 
     const thirdSalesEvidence = customer.thirdSalesOrders.flatMap((item: any) =>
-      this.filesService.parseJsonFileUrls(item.evidenceFileUrls).map((url) => ({
+      this.filesService.toAccessUrls(this.filesService.parseJsonFileUrls(item.evidenceFileUrls)).map((url) => ({
         label: '三销证据',
         url,
         source: 'THIRD_SALES' as const,

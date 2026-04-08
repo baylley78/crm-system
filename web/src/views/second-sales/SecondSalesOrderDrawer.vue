@@ -179,11 +179,19 @@ const loadUsers = async () => {
 const openForCustomer = async (customer: SecondSalesAssignmentItem) => {
   editingOrder.value = null
   currentCustomer.value = customer
-  currentCustomerDetail.value = await fetchCustomerDetail(customer.id)
+  currentCustomerDetail.value = null
   visible.value = true
   resetForm()
-  if (!users.value.length) {
+
+  if (!paymentAccounts.value.length || (canViewSecondSalesUsers() && !users.value.length)) {
     await loadUsers()
+  }
+
+  try {
+    currentCustomerDetail.value = await fetchCustomerDetail(customer.id)
+  } catch {
+    currentCustomerDetail.value = null
+    ElMessage.warning('客户详情暂无权限查看，已使用列表信息继续录单')
   }
 }
 
