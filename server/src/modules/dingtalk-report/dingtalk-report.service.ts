@@ -17,6 +17,7 @@ type PerformanceNotificationPayload = {
   teamName?: string | null
   branchName?: string | null
   groupName?: string | null
+  teamDailyPaymentAmount?: number
   paymentAmount: number
   performanceAmount: number
   orderTime: Date
@@ -172,7 +173,7 @@ export class DingTalkReportService {
     }
 
     const dayRange = this.getDayRange(order.orderDate)
-    const [dailyOrderCount, dailyAggregate] = await Promise.all([
+    const [dailyOrderCount, dailyAggregate, teamDailyPaymentAmount] = await Promise.all([
       this.prisma.firstSalesOrder.count({
         where: {
           salesUserId: order.salesUserId,
@@ -194,6 +195,7 @@ export class DingTalkReportService {
           paymentAmount: true,
         },
       }),
+      this.buildFirstSalesTeamDailyPaymentAmount(order.salesUser.departmentId, order.orderDate),
     ])
 
     return {
@@ -214,6 +216,7 @@ export class DingTalkReportService {
       isTimelyDeal: order.isTimelyDeal ? '是' : '否',
       dailyOrderCount,
       dailyPaymentAmount: Number(dailyAggregate._sum.paymentAmount || 0),
+      teamDailyPaymentAmount,
     }
   }
 
@@ -319,6 +322,7 @@ export class DingTalkReportService {
       isTimelyDeal: payload.isTimelyDeal || '-',
       dailyOrderCount: String(payload.dailyOrderCount ?? 0),
       dailyPaymentAmount: String(payload.dailyPaymentAmount ?? 0),
+      teamDailyPaymentAmount: String(payload.teamDailyPaymentAmount ?? 0),
       departmentDailyPerformanceLines: payload.departmentDailyPerformanceLines || '-',
       departmentDailyPerformanceTotal: String(payload.departmentDailyPerformanceTotal ?? 0),
       dailyTarget: configValues?.dailyTarget?.trim() || '-',
@@ -442,6 +446,39 @@ export class DingTalkReportService {
       lines: rows.map((item) => `${item.name}：${this.formatAmount(item.amount)}`).join('\n'),
       total: Number(rows.reduce((sum, item) => sum + item.amount, 0).toFixed(2)),
     }
+  }
+
+  private async buildFirstSalesTeamDailyPaymentAmount(departmentId: number | null | undefined, orderDate: Date) {
+    if (!departmentId) {
+      return 0
+    }
+
+    const members = await this.prisma.user.findMany({
+      where: { departmentId },
+      select: { id: true },
+    })
+
+    if (!members.length) {
+      return 0
+    }
+
+    const dayRange = this.getDayRange(orderDate)
+    const aggregate = await this.prisma.firstSalesOrder.aggregate({
+      where: {
+        salesUserId: {
+          in: members.map((item) => item.id),
+        },
+        orderDate: {
+          gte: dayRange.start,
+          lt: dayRange.end,
+        },
+      },
+      _sum: {
+        paymentAmount: true,
+      },
+    })
+
+    return Number(aggregate._sum.paymentAmount || 0)
   }
 
   private formatAmount(amount: number) {

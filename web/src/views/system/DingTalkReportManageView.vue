@@ -19,7 +19,7 @@ const editingId = ref<number | null>(null)
 const keyword = ref('')
 const configs = ref<DingTalkReportConfigItem[]>([])
 const departmentOptions = ref<Array<{ id: number; name: string }>>([])
-const templateVariables = ['{{stage}}', '{{customerName}}', '{{phone}}', '{{maskedPhone}}', '{{salesName}}', '{{departmentName}}', '{{groupName}}', '{{teamName}}', '{{branchName}}', '{{paymentAmount}}', '{{performanceAmount}}', '{{orderTime}}', '{{orderType}}', '{{isTimelyDeal}}', '{{dailyOrderCount}}', '{{dailyPaymentAmount}}', '{{departmentDailyPerformanceLines}}', '{{departmentDailyPerformanceTotal}}', '{{dailyTarget}}']
+const templateVariables = ['{{stage}}', '{{customerName}}', '{{phone}}', '{{maskedPhone}}', '{{salesName}}', '{{departmentName}}', '{{groupName}}', '{{teamName}}', '{{branchName}}', '{{paymentAmount}}', '{{performanceAmount}}', '{{orderTime}}', '{{orderType}}', '{{isTimelyDeal}}', '{{dailyOrderCount}}', '{{dailyPaymentAmount}}', '{{teamDailyPaymentAmount}}', '{{departmentDailyPerformanceLines}}', '{{departmentDailyPerformanceTotal}}', '{{dailyTarget}}']
 
 const form = reactive<DingTalkReportConfigPayload>({
   templateType: 'FIRST_SALES',
