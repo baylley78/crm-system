@@ -1,39 +1,34 @@
 <script setup lang="ts">
 import { Delete, Document } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { getFileName, isImageFile, toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
 import { hasPermission, formatPhone } from '../../utils/permissions'
 import { fetchLegalCases, fetchLegalUsers, saveLegalCase, transferLegalCaseToThirdSales } from '../../api/legal'
 import { deleteCustomer } from '../../api/customers'
 import type { LegalCaseItem, LegalCaseStage, SalesUserOption, SaveLegalCasePayload } from '../../types'
-import RefundCreateDialog from '../refund/RefundCreateDialog.vue'
 
 const canEditLegal = () => hasPermission('legal.edit')
-const canEditLegalTime = () => hasPermission('legal.time.edit')
 const canTransferLegal = () => hasPermission('legal.transfer')
 const canViewLegalUsers = () => hasPermission('legal.users.view')
-const canCreateRefund = () => hasPermission('refund.create')
 const canDeleteCustomers = () => hasPermission('customers.delete')
 const canAssignLegal = () => hasPermission('legal.assign')
 const canReviewFiling = () => hasPermission('legal.filing.review')
 const canHandlePreTrial = () => hasPermission('legal.pretrial.handle')
 const canCloseLegal = () => hasPermission('legal.close')
 const canOperateLegal = () => canEditLegal() || canAssignLegal() || canReviewFiling() || canHandlePreTrial() || canCloseLegal()
+const canOnlyEditLegalBaseFields = () => canEditLegal() && !canAssignLegal() && !canReviewFiling() && !canHandlePreTrial() && !canCloseLegal()
 
 const stageOptions: Array<{ label: string; value: LegalCaseStage }> = [
   { label: '鍔╃悊闃舵', value: 'ASSISTANT' },
   { label: '绔嬫涓撳憳闃舵', value: 'FILING_SPECIALIST' },
   { label: '搴墠闃舵', value: 'PRE_TRIAL' },
-  { label: '宸茬粨妗?, value: 'CLOSED' },
+  { label: '已结案', value: 'CLOSED' },
 ]
 
 const loading = ref(false)
 const saving = ref(false)
 const transferringId = ref<number | null>(null)
-const refundingId = ref<number | null>(null)
-const refundDialogVisible = ref(false)
-const refundDraft = ref<any>(null)
 const cases = ref<LegalCaseItem[]>([])
 const total = ref(0)
 const users = ref<SalesUserOption[]>([])
@@ -66,7 +61,7 @@ const stageLabelMap: Record<LegalCaseStage, string> = {
   ASSISTANT: '鍔╃悊闃舵',
   FILING_SPECIALIST: '绔嬫涓撳憳闃舵',
   PRE_TRIAL: '搴墠闃舵',
-  CLOSED: '宸茬粨妗?,
+  CLOSED: '已结案',
 }
 
 const formatStage = (stage?: LegalCaseStage) => (stage ? stageLabelMap[stage] : '-')
@@ -96,7 +91,7 @@ const loadData = async () => {
 const openDialog = (item: LegalCaseItem) => {
   activeCase.value = item
   form.customerId = item.customerId
-  form.progressStatus = item.progressStatus || '澶勭悊涓?
+  form.progressStatus = item.progressStatus || '处理中'
   form.caseResult = item.caseResult || ''
   form.remark = item.remark || ''
   form.startDate = item.startDate ? item.startDate.slice(0, 16) : ''
@@ -120,7 +115,7 @@ const submit = async () => {
   saving.value = true
   try {
     await saveLegalCase(form)
-    ElMessage.success('娉曞姟杩涘害宸蹭繚瀛?)
+    ElMessage.success('法务进度已保存')
     dialogVisible.value = false
     await loadData()
   } finally {
@@ -141,11 +136,11 @@ const legalActionLabel = computed(() => {
 
 const legalActionTip = computed(() => {
   if (canCloseLegal()) return '鍙鐞嗙粨妗堢粨鏋滐紝骞惰ˉ鍏呮硶鍔″叏娴佺▼淇℃伅'
-  if (canHandlePreTrial()) return '鍙姙鐞嗗涵鍓嶉樁娈碉紝骞剁淮鎶ゅ墠搴忔硶鍔′俊鎭?
+  if (canHandlePreTrial()) return '可办理庭前阶段，并维护前序法务信息'
   if (canReviewFiling()) return '鍙鏍歌祫鏂欍€佹爣璁扮珛妗堥€氳繃锛屽苟缁存姢鍓嶅簭娉曞姟淇℃伅'
   if (canAssignLegal()) return '鍙垎娲惧姪鐞嗐€佺珛妗堜笓鍛樸€佸涵鍓嶈礋璐ｄ汉锛屽苟缁存姢妗堜欢杩涘害'
   if (canEditLegal()) return '鍙櫥璁版湰浜鸿礋璐ｇ殑娉曞姟璺熻繘淇℃伅'
-  return '鍙煡鐪嬫硶鍔℃浠惰鎯?
+  return '可查看法务案件详情'
 })
 
 const transferToThirdSales = async (item: LegalCaseItem) => {
@@ -159,31 +154,17 @@ const transferToThirdSales = async (item: LegalCaseItem) => {
   }
 }
 
-const quickCreateRefund = async (item: LegalCaseItem) => {
-  refundingId.value = item.customerId
-  refundDraft.value = {
-    customerId: item.customerId,
-    customerName: item.name,
-    phone: item.phone,
-    sourceStage: 'LEGAL',
-    reason: `瀹㈡埛鍦ㄦ硶鍔￠樁娈电敵璇烽€€娆撅紝褰撳墠杩涘害锛?{item.progressStatus}`,
-    remark: item.remark || '',
-  }
-  refundDialogVisible.value = true
-  refundingId.value = null
-}
-
 const handleDeleteCustomer = async (item: LegalCaseItem) => {
-  await ElMessageBox.confirm(`纭鍒犻櫎瀹㈡埛鈥?{item.name}鈥濆悧锛熷垹闄ゅ悗璇ュ鎴风殑鐩稿叧涓氱哗涓庤窡杩涙暟鎹篃浼氫竴骞跺垹闄ゃ€俙, '鍒犻櫎瀹㈡埛', {
+  await ElMessageBox.confirm(`确认删除客户“${item.name}”吗？删除后该客户的相关业绩与跟进数据也会一并删除。`, '删除客户', {
     type: 'warning',
-    confirmButtonText: '纭鍒犻櫎',
-    cancelButtonText: '鍙栨秷',
+    confirmButtonText: '确认删除',
+    cancelButtonText: '取消',
   })
 
   saving.value = true
   try {
     await deleteCustomer(item.customerId)
-    ElMessage.success('瀹㈡埛宸插垹闄?)
+    ElMessage.success('客户已删除')
     await loadData()
   } finally {
     saving.value = false
@@ -207,50 +188,47 @@ const handleStageChange = async () => {
 const openAttachment = (url?: string) => {
   const absoluteUrl = toAbsoluteFileUrl(url)
   if (!absoluteUrl) {
-    ElMessage.warning('闄勪欢鍦板潃鏃犳晥')
+    ElMessage.warning('附件地址无效')
     return
   }
   window.open(absoluteUrl, '_blank', 'noopener')
 }
-
-onMounted(loadData)
 </script>
 
 <template>
   <div class="page-stack">
     <el-card>
-      <template #header>娉曞姟绯荤粺</template>
+      <template #header>法务系统</template>
       <div class="legal-layout">
         <el-card shadow="never" class="legal-list-card">
           <div class="legal-filters">
-            <el-select v-model="selectedStage" clearable placeholder="鎸夋硶鍔￠樁娈电瓫閫? style="width: 220px" @change="handleStageChange">
+            <el-select v-model="selectedStage" clearable placeholder="按法务阶段筛选" style="width: 220px" @change="handleStageChange">
               <el-option v-for="option in stageOptions" :key="option.value" :label="option.label" :value="option.value" />
             </el-select>
           </div>
           <el-table v-loading="loading" :data="paginatedCases" highlight-current-row @current-change="selectCase" @row-click="selectCase">
-            <el-table-column label="瀹㈡埛缂栧彿" prop="customerNo" min-width="150" />
-            <el-table-column label="瀹㈡埛濮撳悕" prop="name" min-width="120" />
-            <el-table-column label="鎵嬫満鍙风爜" min-width="130">
+            <el-table-column label="客户编号" prop="customerNo" min-width="150" />
+            <el-table-column label="客户姓名" prop="name" min-width="120" />
+            <el-table-column label="手机号码" min-width="130">
               <template #default="scope">
                 {{ formatPhone(scope.row.phone, scope.row) }}
               </template>
             </el-table-column>
-            <el-table-column label="浜岄攢浠樻" prop="secondPaymentAmount" min-width="100" />
-            <el-table-column label="褰撳墠鐘舵€? prop="currentStatus" min-width="130" />
-            <el-table-column label="娉曞姟闃舵" min-width="140">
+            <el-table-column label="二销付款" prop="secondPaymentAmount" min-width="100" />
+            <el-table-column label="当前状态" prop="currentStatus" min-width="130" />
+            <el-table-column label="法务阶段" min-width="140">
               <template #default="scope">{{ formatStage(scope.row.stage) }}</template>
             </el-table-column>
-            <el-table-column label="娉曞姟杩涘害" prop="progressStatus" min-width="140" />
-            <el-table-column label="鎿嶄綔" width="320">
+            <el-table-column label="法务进度" prop="progressStatus" min-width="140" />
+            <el-table-column label="操作" width="320">
               <template #default="scope">
                 <el-tooltip v-if="canOperateLegal()" :content="legalActionTip" placement="top">
                   <el-button link type="primary" @click="openDialog(scope.row)">{{ legalActionLabel }}</el-button>
                 </el-tooltip>
-                <el-button v-if="canCreateRefund()" link type="danger" :loading="refundingId === scope.row.customerId" @click="quickCreateRefund(scope.row)">鍙戣捣閫€娆?/el-button>
-                <el-tooltip v-if="canShowTransfer(scope.row)" content="娉曞姟娴佺▼宸插畬鎴愶紝鍙浆鍏ヤ笁閿€鎺ュ緟" placement="top">
-                  <el-button link type="success" :loading="transferringId === scope.row.customerId" @click="transferToThirdSales(scope.row)">绉讳氦涓夐攢</el-button>
+                <el-tooltip v-if="canShowTransfer(scope.row)" content="法务流程已完成，可转入三销接待" placement="top">
+                  <el-button link type="success" :loading="transferringId === scope.row.customerId" @click="transferToThirdSales(scope.row)">移交三销</el-button>
                 </el-tooltip>
-                <el-tooltip v-if="canDeleteCustomers()" content="鍒犻櫎瀹㈡埛" placement="top">
+                <el-tooltip v-if="canDeleteCustomers()" content="删除客户" placement="top">
                   <el-button link type="danger" :icon="Delete" @click="handleDeleteCustomer(scope.row)" />
                 </el-tooltip>
               </template>
@@ -269,129 +247,124 @@ onMounted(loadData)
         </el-card>
 
         <el-card shadow="never" class="legal-detail-card">
-          <template #header>瀹㈡埛鎯呭喌銆佸矖浣嶆祦杞笌涓婃父璇佹嵁</template>
+          <template #header>客户情况、岗位流转与上游证据</template>
           <template v-if="activeCase">
             <div class="page-stack-sm">
               <el-descriptions :column="1" border>
-                <el-descriptions-item label="褰撳墠娉曞姟闃舵">{{ formatStage(activeCase.stage) }}</el-descriptions-item>
-                <el-descriptions-item label="褰撳墠璐熻矗浜?>{{ activeCase.legalUserName || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="娉曞姟鍔╃悊">{{ activeCase.assistantUserName || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="绔嬫涓撳憳">{{ activeCase.filingSpecialistUserName || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="搴墠璐熻矗浜?>{{ activeCase.preTrialUserName || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="瀹㈡埛鎯呭喌璇存槑">{{ activeCase.customerSituationRemark || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="涓€閿€鎯呭喌璇存槑">{{ activeCase.firstSalesRemark || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="浜岄攢鎯呭喌璇存槑">{{ activeCase.secondSalesRemark || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="娉曞姟澶囨敞">{{ activeCase.remark || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="鏀堕泦璇佹嵁">{{ activeCase.assistantCollected ? '宸插畬鎴? : '鏈畬鎴? }}</el-descriptions-item>
-                <el-descriptions-item label="鏂囦功鎾板啓">{{ activeCase.assistantDocumented ? '宸插畬鎴? : '鏈畬鎴? }}</el-descriptions-item>
-                <el-descriptions-item label="鏄惁鏌ユ。">{{ activeCase.archiveNeeded ? '鏄? : '鍚? }}</el-descriptions-item>
-                <el-descriptions-item label="鏌ユ。瀹屾垚">{{ activeCase.archiveCompleted ? '宸插畬鎴? : '鏈畬鎴? }}</el-descriptions-item>
-                <el-descriptions-item label="璧勬枡瀹℃牳">{{ activeCase.filingReviewed ? '宸插鏍? : '鏈鏍? }}</el-descriptions-item>
-                <el-descriptions-item label="绔嬫閫氳繃">{{ activeCase.filingApproved ? '鏄? : '鍚? }}</el-descriptions-item>
-                <el-descriptions-item label="宸茶浆搴墠">{{ activeCase.transferredToPreTrial ? '鏄? : '鍚? }}</el-descriptions-item>
-                <el-descriptions-item label="缁撴缁撴灉">{{ activeCase.closeResult || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="当前法务阶段">{{ formatStage(activeCase.stage) }}</el-descriptions-item>
+                <el-descriptions-item label="当前负责人">{{ activeCase.legalUserName || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="法务助理">{{ activeCase.assistantUserName || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="立案专员">{{ activeCase.filingSpecialistUserName || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="庭前负责人">{{ activeCase.preTrialUserName || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="客户情况说明">{{ activeCase.customerSituationRemark || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="一销情况说明">{{ activeCase.firstSalesRemark || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="二销情况说明">{{ activeCase.secondSalesRemark || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="法务备注">{{ activeCase.remark || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="收集证据">{{ activeCase.assistantCollected ? '已完成' : '未完成' }}</el-descriptions-item>
+                <el-descriptions-item label="文书撰写">{{ activeCase.assistantDocumented ? '已完成' : '未完成' }}</el-descriptions-item>
+                <el-descriptions-item label="是否查档">{{ activeCase.archiveNeeded ? '是' : '否' }}</el-descriptions-item>
+                <el-descriptions-item label="查档完成">{{ activeCase.archiveCompleted ? '已完成' : '未完成' }}</el-descriptions-item>
+                <el-descriptions-item label="资料审核">{{ activeCase.filingReviewed ? '已审核' : '未审核' }}</el-descriptions-item>
+                <el-descriptions-item label="立案通过">{{ activeCase.filingApproved ? '是' : '否' }}</el-descriptions-item>
+                <el-descriptions-item label="已转庭前">{{ activeCase.transferredToPreTrial ? '是' : '否' }}</el-descriptions-item>
+                <el-descriptions-item label="结案结果">{{ activeCase.closeResult || '-' }}</el-descriptions-item>
               </el-descriptions>
               <el-card shadow="never">
-                <template #header>澶勭悊杞ㄨ抗</template>
+                <template #header>处理轨迹</template>
                 <el-timeline>
-                  <el-timeline-item v-if="activeCase.acceptedAt" :timestamp="activeCase.acceptedAt">宸叉帴妗?/el-timeline-item>
-                  <el-timeline-item v-if="activeCase.assistantTransferredAt" :timestamp="activeCase.assistantTransferredAt">宸茶浆绔嬫涓撳憳</el-timeline-item>
-                  <el-timeline-item v-if="activeCase.filingApprovedAt" :timestamp="activeCase.filingApprovedAt">绔嬫閫氳繃</el-timeline-item>
-                  <el-timeline-item v-if="activeCase.preTrialTransferredAt" :timestamp="activeCase.preTrialTransferredAt">宸茶浆搴墠</el-timeline-item>
+                  <el-timeline-item v-if="activeCase.acceptedAt" :timestamp="activeCase.acceptedAt">已接案</el-timeline-item>
+                  <el-timeline-item v-if="activeCase.assistantTransferredAt" :timestamp="activeCase.assistantTransferredAt">已转立案专员</el-timeline-item>
+                  <el-timeline-item v-if="activeCase.filingApprovedAt" :timestamp="activeCase.filingApprovedAt">立案通过</el-timeline-item>
+                  <el-timeline-item v-if="activeCase.preTrialTransferredAt" :timestamp="activeCase.preTrialTransferredAt">已转庭前</el-timeline-item>
                 </el-timeline>
               </el-card>
               <div>
-                <div class="evidence-section-title">涓婃父璇佹嵁</div>
+                <div class="evidence-section-title">上游证据</div>
                 <div v-if="activeCase.upstreamEvidenceFileUrls.length" class="evidence-grid">
-                  <div v-for="(item, index) in activeCase.upstreamEvidenceFileUrls" :key="`${item}-${index}`" class="evidence-card">
-                    <img v-if="isImageFile(item)" :src="toAbsoluteFileUrl(item)" :alt="`涓婃父璇佹嵁${index + 1}`" class="evidence-image" @click="openAttachment(item)" />
+                  <div v-for="(item, index) in activeCase.upstreamEvidenceFileUrls" :key="item + '-' + index" class="evidence-card">
+                    <img v-if="isImageFile(item)" :src="toAbsoluteFileUrl(item)" :alt="'上游证据' + (index + 1)" class="evidence-image" @click="openAttachment(item)" />
                     <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(item)">
                       <el-icon><Document /></el-icon>
-                      <span>{{ getFileName(item) || `涓婃父璇佹嵁${index + 1}` }}</span>
+                      <span>{{ getFileName(item) || '上游证据' + (index + 1) }}</span>
                     </el-button>
                   </div>
                 </div>
-                <el-empty v-else description="鏆傛棤涓婃父璇佹嵁" />
+                <el-empty v-else description="暂无上游证据" />
               </div>
             </div>
           </template>
-          <el-empty v-else description="璇烽€夋嫨娉曞姟妗堜欢" />
+          <el-empty v-else description="请选择法务案件" />
         </el-card>
       </div>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" title="澶勭悊娉曞姟妗堜欢" width="720px">
+    <el-dialog v-model="dialogVisible" title="处理法务案件" width="720px">
       <el-form label-width="130px" class="form-grid">
-        <el-form-item label="褰撳墠璐熻矗浜?>
+        <el-form-item label="当前负责人">
           <div class="static-value">{{ cases.find((item) => item.customerId === form.customerId)?.legalUserName || '-' }}</div>
         </el-form-item>
-        <el-form-item label="娉曞姟闃舵">
-          <el-select v-model="form.stage" style="width: 100%">
+        <el-form-item label="法务阶段">
+          <el-select v-model="form.stage" style="width: 100%" :disabled="canOnlyEditLegalBaseFields()">
             <el-option v-for="option in stageOptions" :key="option.value" :label="option.label" :value="option.value" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="canAssignLegal()" label="娉曞姟鍔╃悊">
+        <el-form-item v-if="canAssignLegal()" label="法务助理">
           <el-select v-model="form.assistantUserId" clearable style="width: 100%">
-            <el-option v-for="user in legalUsers" :key="user.id" :label="`${user.realName}锛?{user.roleName}锛塦" :value="user.id" />
+            <el-option v-for="user in legalUsers" :key="user.id" :label="user.realName + '（' + user.roleName + '）'" :value="user.id" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="canAssignLegal()" label="绔嬫涓撳憳">
+        <el-form-item v-if="canAssignLegal()" label="立案专员">
           <el-select v-model="form.filingSpecialistUserId" clearable style="width: 100%">
-            <el-option v-for="user in legalUsers" :key="user.id" :label="`${user.realName}锛?{user.roleName}锛塦" :value="user.id" />
+            <el-option v-for="user in legalUsers" :key="user.id" :label="user.realName + '（' + user.roleName + '）'" :value="user.id" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="canAssignLegal()" label="搴墠璐熻矗浜?>
+        <el-form-item v-if="canAssignLegal()" label="庭前负责人">
           <el-select v-model="form.preTrialUserId" clearable style="width: 100%">
-            <el-option v-for="user in legalUsers" :key="user.id" :label="`${user.realName}锛?{user.roleName}锛塦" :value="user.id" />
+            <el-option v-for="user in legalUsers" :key="user.id" :label="user.realName + '（' + user.roleName + '）'" :value="user.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="娉曞姟杩涘害" class="full-width">
-          <el-input v-model="form.progressStatus" placeholder="璇疯緭鍏ユ硶鍔¤繘搴? />
+        <el-form-item label="法务进度" class="full-width">
+          <el-input v-model="form.progressStatus" placeholder="请输入法务进度" />
         </el-form-item>
-        <el-form-item label="澶勭悊缁撴灉" class="full-width">
-          <el-input v-model="form.caseResult" placeholder="璇疯緭鍏ュ鐞嗙粨鏋? />
+        <el-form-item label="处理结果" class="full-width">
+          <el-input v-model="form.caseResult" placeholder="请输入处理结果" />
         </el-form-item>
-        <el-form-item v-if="canEditLegalTime()" label="寮€濮嬫椂闂? class="full-width">
-          <el-date-picker v-model="form.startDate" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="璇烽€夋嫨娉曞姟寮€濮嬫椂闂? style="width: 100%" />
+        <el-form-item label="备注" class="full-width">
+          <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="请输入法务备注" />
         </el-form-item>
-        <el-form-item label="澶囨敞" class="full-width">
-          <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="璇疯緭鍏ユ硶鍔″娉? />
-        </el-form-item>
-        <el-form-item label="宸叉敹闆嗚瘉鎹?>
+        <el-form-item label="已收集证据">
           <el-switch v-model="form.assistantCollected" />
         </el-form-item>
-        <el-form-item label="宸插啓鏂囦功">
+        <el-form-item label="已写文书">
           <el-switch v-model="form.assistantDocumented" />
         </el-form-item>
-        <el-form-item label="闇€瑕佹煡妗?>
+        <el-form-item label="需要查档">
           <el-switch v-model="form.archiveNeeded" />
         </el-form-item>
-        <el-form-item label="鏌ユ。瀹屾垚">
+        <el-form-item label="查档完成">
           <el-switch v-model="form.archiveCompleted" :disabled="!form.archiveNeeded" />
         </el-form-item>
-        <el-form-item v-if="canReviewFiling()" label="璧勬枡宸插鏍?>
+        <el-form-item v-if="canReviewFiling()" label="资料已审核">
           <el-switch v-model="form.filingReviewed" />
         </el-form-item>
-        <el-form-item v-if="canReviewFiling()" label="绔嬫鎴愬姛">
+        <el-form-item v-if="canReviewFiling()" label="立案成功">
           <el-switch v-model="form.filingApproved" />
         </el-form-item>
-        <el-form-item v-if="canHandlePreTrial()" label="杞叆搴墠">
+        <el-form-item v-if="canHandlePreTrial()" label="转入庭前">
           <el-switch v-model="form.transferredToPreTrial" />
         </el-form-item>
-        <el-form-item v-if="canCloseLegal()" label="瀹屾垚妗堜欢">
+        <el-form-item v-if="canCloseLegal()" label="完成案件">
           <el-switch v-model="form.isCompleted" />
         </el-form-item>
-        <el-form-item v-if="canCloseLegal()" label="缁撴缁撴灉" class="full-width">
-          <el-input v-model="form.closeResult" placeholder="璇疯緭鍏ョ粨妗堢粨鏋? />
+        <el-form-item v-if="canCloseLegal()" label="结案结果" class="full-width">
+          <el-input v-model="form.closeResult" placeholder="请输入结案结果" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">鍙栨秷</el-button>
-        <el-button type="primary" :loading="saving" @click="submit">淇濆瓨</el-button>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="submit">保存</el-button>
       </template>
     </el-dialog>
-
-    <RefundCreateDialog v-model:visible="refundDialogVisible" :draft="refundDraft" @success="loadData" />
   </div>
 </template>
 

@@ -13,6 +13,8 @@ import { getFileName, isImageFile, toAbsoluteFileUrl } from '../../composables/u
 import type { CustomerDetail, PaymentAccountOption, SalesUserOption, SecondSalesAssignmentItem, SecondSalesOrderListItem, SecondSalesOrderPayload } from '../../types'
 
 const canViewSecondSalesUsers = () => hasPermission('secondSales.users.view')
+const canReadPerformanceFormCustomer = () => hasPermission('customers.read.performanceForm')
+const canViewCourtConfig = () => hasPermission('system.courtConfig.view')
 const canEditOrderTime = () => hasPermission('secondSales.time.edit')
 
 const visible = defineModel<boolean>('visible', { required: true })
@@ -164,7 +166,7 @@ const fillFormForEdit = (order: SecondSalesOrderListItem) => {
 const loadUsers = async () => {
   const [paymentAccountsResult, courtConfigResult, userListResult] = await Promise.allSettled([
     fetchPaymentAccountOptions(),
-    fetchCourtConfig(),
+    canViewCourtConfig() ? fetchCourtConfig() : Promise.resolve({ hearingCost: 0 }),
     canViewSecondSalesUsers() ? fetchSecondSalesUsers() : Promise.resolve([] as SalesUserOption[]),
   ])
 
@@ -205,11 +207,15 @@ const openForCustomer = async (customer: SecondSalesAssignmentItem) => {
   }
 
   try {
-    currentCustomerDetail.value = await fetchCustomerDetail(customer.id)
+    if (canReadPerformanceFormCustomer()) {
+      currentCustomerDetail.value = await fetchCustomerDetail(`${customer.id}?scene=performance-form` as unknown as number)
+      return
+    }
   } catch {
-    currentCustomerDetail.value = null
     ElMessage.warning('客户详情暂无权限查看，已使用列表信息继续录单')
   }
+
+  currentCustomerDetail.value = null
 }
 
 const openForEdit = async (order: SecondSalesOrderListItem) => {

@@ -10,6 +10,7 @@ import { fetchCourtConfig } from '../../api/court-config'
 import type { PaymentAccountOption, SalesUserOption, ThirdSalesCustomerSearchResult, ThirdSalesOrderListItem, ThirdSalesOrderPayload } from '../../types'
 
 const canViewThirdSalesUsers = () => hasPermission('thirdSales.users.view')
+const canViewCourtConfig = () => hasPermission('system.courtConfig.view')
 const canEditOrderTime = () => hasPermission('thirdSales.time.edit')
 
 const visible = defineModel<boolean>('visible', { required: true })
@@ -135,7 +136,7 @@ const fillFormForEdit = (order: ThirdSalesOrderListItem) => {
 const loadUsers = async () => {
   const [paymentAccountList, courtConfig, userList] = await Promise.all([
     fetchPaymentAccountOptions(),
-    fetchCourtConfig(),
+    canViewCourtConfig() ? fetchCourtConfig() : Promise.resolve({ hearingCost: 0 }),
     canViewThirdSalesUsers() ? fetchThirdSalesUsers() : Promise.resolve([] as SalesUserOption[]),
   ])
   users.value = userList
