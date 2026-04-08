@@ -15,6 +15,8 @@ type PerformanceNotificationPayload = {
   departmentId?: number | null
   departmentName?: string | null
   teamName?: string | null
+  branchName?: string | null
+  groupName?: string | null
   paymentAmount: number
   performanceAmount: number
   orderTime: Date
@@ -153,7 +155,13 @@ export class DingTalkReportService {
         salesUser: {
           include: {
             departmentInfo: {
-              include: { parent: true },
+              include: {
+                parent: {
+                  include: {
+                    parent: true,
+                  },
+                },
+              },
             },
           },
         },
@@ -196,7 +204,9 @@ export class DingTalkReportService {
       salesName: order.salesUser.realName,
       departmentId: order.salesUser.departmentId,
       departmentName: order.salesUser.departmentInfo?.name,
+      groupName: order.salesUser.departmentInfo?.name,
       teamName: order.salesUser.departmentInfo?.parent?.name,
+      branchName: order.salesUser.departmentInfo?.parent?.parent?.name,
       paymentAmount: Number(order.paymentAmount),
       performanceAmount: Number(order.paymentAmount),
       orderTime: order.orderDate,
@@ -215,7 +225,13 @@ export class DingTalkReportService {
         secondSalesUser: {
           include: {
             departmentInfo: {
-              include: { parent: true },
+              include: {
+                parent: {
+                  include: {
+                    parent: true,
+                  },
+                },
+              },
             },
           },
         },
@@ -234,7 +250,9 @@ export class DingTalkReportService {
       salesName: order.secondSalesUser.realName,
       departmentId: order.secondSalesUser.departmentId,
       departmentName: order.secondSalesUser.departmentInfo?.name,
+      groupName: order.secondSalesUser.departmentInfo?.name,
       teamName: order.secondSalesUser.departmentInfo?.parent?.name,
+      branchName: order.secondSalesUser.departmentInfo?.parent?.parent?.name,
       paymentAmount: Number(order.secondPaymentAmount),
       performanceAmount: Number(order.performanceAmount),
       orderTime: order.orderDate,
@@ -251,7 +269,13 @@ export class DingTalkReportService {
         thirdSalesUser: {
           include: {
             departmentInfo: {
-              include: { parent: true },
+              include: {
+                parent: {
+                  include: {
+                    parent: true,
+                  },
+                },
+              },
             },
           },
         },
@@ -268,7 +292,9 @@ export class DingTalkReportService {
       salesName: order.thirdSalesUser.realName,
       departmentId: order.thirdSalesUser.departmentId,
       departmentName: order.thirdSalesUser.departmentInfo?.name,
+      groupName: order.thirdSalesUser.departmentInfo?.name,
       teamName: order.thirdSalesUser.departmentInfo?.parent?.name,
+      branchName: order.thirdSalesUser.departmentInfo?.parent?.parent?.name,
       paymentAmount: Number(order.paymentAmount),
       performanceAmount: Number(order.performanceAmount),
       orderTime: order.orderDate,
@@ -283,10 +309,12 @@ export class DingTalkReportService {
       maskedPhone: payload.maskedPhone || this.maskPhone(payload.phone),
       salesName: payload.salesName,
       departmentName: payload.departmentName || '-',
+      groupName: payload.groupName || payload.departmentName || '-',
       teamName: payload.teamName || '-',
+      branchName: payload.branchName || '-',
       paymentAmount: String(payload.paymentAmount),
       performanceAmount: String(payload.performanceAmount),
-      orderTime: payload.orderTime.toISOString().replace('T', ' ').slice(0, 19),
+      orderTime: this.formatDateTime(payload.orderTime),
       orderType: payload.orderType || '-',
       isTimelyDeal: payload.isTimelyDeal || '-',
       dailyOrderCount: String(payload.dailyOrderCount ?? 0),
@@ -418,6 +446,16 @@ export class DingTalkReportService {
 
   private formatAmount(amount: number) {
     return Number.isInteger(amount) ? String(amount) : String(amount)
+  }
+
+  private formatDateTime(date: Date) {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    const seconds = String(date.getSeconds()).padStart(2, '0')
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
   }
 
   private async ensureDepartments(ids: number[]) {
