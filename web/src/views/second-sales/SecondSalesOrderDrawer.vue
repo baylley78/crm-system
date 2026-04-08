@@ -162,29 +162,34 @@ const fillFormForEdit = (order: SecondSalesOrderListItem) => {
 }
 
 const loadUsers = async () => {
-  try {
-    const [paymentAccountList, courtConfig, userList] = await Promise.all([
-      fetchPaymentAccountOptions(),
-      fetchCourtConfig(),
-      canViewSecondSalesUsers() ? fetchSecondSalesUsers() : Promise.resolve([] as SalesUserOption[]),
-    ])
-    users.value = userList
-    paymentAccounts.value = paymentAccountList
-    hearingCost.value = courtConfig.hearingCost || 0
-    assignDefaultSecondSalesUser()
-    if (!form.paymentAccountId) {
-      form.paymentAccountId = paymentAccounts.value[0]?.id || undefined
-    }
-    if (!paymentAccounts.value.length) {
-      ElMessage.warning('暂无可用收款账户，请联系管理员先启用收款账户')
-    }
-  } catch {
-    users.value = []
-    paymentAccounts.value = []
-    hearingCost.value = 0
-    form.paymentAccountId = undefined
-    assignDefaultSecondSalesUser()
-    ElMessage.error('二销人员或收款账户加载失败，请刷新后重试')
+  const [paymentAccountsResult, courtConfigResult, userListResult] = await Promise.allSettled([
+    fetchPaymentAccountOptions(),
+    fetchCourtConfig(),
+    canViewSecondSalesUsers() ? fetchSecondSalesUsers() : Promise.resolve([] as SalesUserOption[]),
+  ])
+
+  paymentAccounts.value = paymentAccountsResult.status === 'fulfilled' ? paymentAccountsResult.value : []
+  hearingCost.value = courtConfigResult.status === 'fulfilled' ? courtConfigResult.value.hearingCost || 0 : 0
+  users.value = userListResult.status === 'fulfilled' ? userListResult.value : []
+
+  assignDefaultSecondSalesUser()
+
+  if (!form.paymentAccountId) {
+    form.paymentAccountId = paymentAccounts.value[0]?.id || undefined
+  }
+
+  if (paymentAccountsResult.status === 'rejected') {
+    ElMessage.error('收款账户加载失败，请刷新后重试')
+  } else if (!paymentAccounts.value.length) {
+    ElMessage.warning('暂无可用收款账户，请联系管理员先启用收款账户')
+  }
+
+  if (userListResult.status === 'rejected') {
+    ElMessage.error('二销人员加载失败，请刷新后重试')
+  }
+
+  if (courtConfigResult.status === 'rejected') {
+    ElMessage.warning('开庭成本配置暂无权限读取，已按 0 处理')
   }
 }
 
