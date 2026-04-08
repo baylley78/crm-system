@@ -50,6 +50,7 @@ export const BUILT_IN_PERMISSION_DEFINITIONS: BuiltInPermissionDefinition[] = [
   { code: 'customers.delete', name: '删除客户档案' },
   { code: 'customers.phone.unmask', name: '查看手机号明文', description: '允许查看客户手机号明文，不再脱敏显示' },
   { code: 'customers.phone.unmask.self', name: '仅查看本人客户手机号明文', description: '允许查看本人名下客户手机号明文，非本人客户继续脱敏显示' },
+  { code: 'customers.read.performanceForm', name: '只读查看业绩录入客户资料', description: '允许在一二三销业绩录入表单中只读查看客户详情资料' },
   { code: 'contracts.view', name: '查看合同档案' },
   { code: 'contracts.create', name: '新增合同档案' },
   { code: 'contracts.users.view', name: '查看合同模块用户选项', description: '允许查看合同模块中的用户下拉选项' },
@@ -160,6 +161,7 @@ const reportsPermissionCodes = [
 ]
 const firstSalesPermissionCodes = [
   'customers.view',
+  'customers.read.performanceForm',
   'customers.create',
   'customers.edit',
   'customers.follow',
@@ -181,6 +183,7 @@ const firstSalesPermissionCodes = [
 ]
 const secondSalesPermissionCodes = [
   'customers.view',
+  'customers.read.performanceForm',
   'customers.edit',
   'customers.follow',
   'customers.status',
@@ -197,6 +200,8 @@ const secondSalesPermissionCodes = [
   'system.courtConfig.view',
 ]
 const thirdSalesPermissionCodes = [
+  'customers.view',
+  'customers.read.performanceForm',
   'customers.phone.unmask.self',
   'thirdSales.view',
   'thirdSales.users.view',
@@ -205,6 +210,7 @@ const thirdSalesPermissionCodes = [
   'thirdSales.edit',
   'thirdSales.time.edit',
   'thirdSales.export',
+  'system.courtConfig.view',
 ]
 const legalPermissionCodes = ['legal.view', 'legal.users.view', 'legal.edit']
 const legalBaseTransferPermissionCodes = ['legal.transfer']

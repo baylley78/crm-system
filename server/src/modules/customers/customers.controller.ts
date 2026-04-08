@@ -21,6 +21,7 @@ export class CustomersController {
   }
 
   @Get(':id')
+  @RequirePermission('customers.read.performanceForm')
   findOne(@CurrentUser() currentUser: AuthenticatedUser, @Param('id') id: string) {
     return this.customersService.findOne(currentUser, Number(id))
   }

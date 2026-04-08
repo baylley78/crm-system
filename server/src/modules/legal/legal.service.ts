@@ -342,27 +342,30 @@ export class LegalService {
     }
 
     const nextStage = dto.stage ?? currentStage
+    const enteredFilingStage = dto.stage !== undefined && currentStage !== LegalCaseStage.FILING_SPECIALIST && nextStage === LegalCaseStage.FILING_SPECIALIST
     const changedFilingReview =
       (dto.filingReviewed !== undefined && dto.filingReviewed !== (latestCase?.filingReviewed ?? false)) ||
       (dto.filingApproved !== undefined && dto.filingApproved !== (latestCase?.filingApproved ?? false)) ||
-      (dto.stage !== undefined && currentStage !== LegalCaseStage.FILING_SPECIALIST && nextStage === LegalCaseStage.FILING_SPECIALIST)
+      enteredFilingStage
 
     if (changedFilingReview && !permissions.has(LEGAL_FILING_REVIEW_PERMISSION)) {
       throw new BadRequestException('无权执行立案审核操作')
     }
 
+    const enteredPreTrialStage = dto.stage !== undefined && currentStage !== LegalCaseStage.PRE_TRIAL && nextStage === LegalCaseStage.PRE_TRIAL
     const changedPreTrial =
       (dto.transferredToPreTrial !== undefined && dto.transferredToPreTrial !== (latestCase?.transferredToPreTrial ?? false)) ||
-      (dto.stage !== undefined && currentStage !== LegalCaseStage.PRE_TRIAL && nextStage === LegalCaseStage.PRE_TRIAL)
+      enteredPreTrialStage
 
     if (changedPreTrial && !permissions.has(LEGAL_PRETRIAL_HANDLE_PERMISSION)) {
       throw new BadRequestException('无权处理庭前阶段')
     }
 
+    const enteredClosedStage = dto.stage !== undefined && currentStage !== LegalCaseStage.CLOSED && nextStage === LegalCaseStage.CLOSED
     const changedClose =
       (dto.isCompleted !== undefined && dto.isCompleted !== (latestCase?.isCompleted ?? false)) ||
       (dto.closeResult !== undefined && dto.closeResult !== (latestCase?.closeResult ?? '')) ||
-      (dto.stage !== undefined && currentStage !== LegalCaseStage.CLOSED && nextStage === LegalCaseStage.CLOSED)
+      enteredClosedStage
 
     if (changedClose && !permissions.has(LEGAL_CLOSE_PERMISSION)) {
       throw new BadRequestException('无权执行法务结案操作')
