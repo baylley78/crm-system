@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
-import { CustomerStatus, DataScope, FinanceReviewStatus, Prisma } from '@prisma/client'
+import { CustomerStatus, DataScope, FinanceReviewStatus, FirstOrderType, Prisma } from '@prisma/client'
 import { PrismaService } from '../../prisma/prisma.service'
 import type { AuthenticatedUser } from '../auth/auth.service'
 import { CustomersService } from '../customers/customers.service'
@@ -210,11 +210,32 @@ export class ThirdSalesService {
     }
   }
 
+  private resolveOrderType(orderType: CreateThirdSalesOrderDto['orderType']) {
+    return orderType as FirstOrderType
+  }
+
+  private resolvePaymentStatus(orderType: CreateThirdSalesOrderDto['orderType'], arrearsAmount: number) {
+    if (orderType === 'DEPOSIT') {
+      return 'PARTIAL'
+    }
+
+    return arrearsAmount > 0 ? 'PARTIAL' : 'PAID'
+  }
+
+  private resolveCurrentStatus(orderType: CreateThirdSalesOrderDto['orderType'], arrearsAmount: number) {
+    if (orderType === 'DEPOSIT' || arrearsAmount > 0) {
+      return CustomerStatus.THIRD_SALES_FOLLOWING
+    }
+
+    return CustomerStatus.COMPLETED_THIRD_SALES
+  }
+
   async createOrder(
     currentUser: AuthenticatedUser,
     dto: CreateThirdSalesOrderDto,
     files?: {
       paymentScreenshot?: Array<{ filename: string }>
+      chatRecordFile?: Array<{ filename: string }>
       evidenceFiles?: Array<{ filename: string }>
     },
   ) {
@@ -240,17 +261,30 @@ export class ThirdSalesService {
     }
 
     const paymentAmount = this.parseAmount(dto.paymentAmount, '回款金额')
+    const contractAmount = this.parseAmount(dto.contractAmount, '应收金额')
+    const arrearsAmount = Math.max(contractAmount - paymentAmount, 0)
+    const orderType = this.resolveOrderType(dto.orderType)
+    const paymentStatus = this.resolvePaymentStatus(dto.orderType, arrearsAmount)
     const rawPerformanceAmount = paymentAmount
     const hearingCostAmount = await this.courtConfigService.getHearingCost()
     const performanceAmount = Math.max(rawPerformanceAmount - hearingCostAmount, 0)
     const paymentAccount = await this.paymentAccountsService.ensureAvailable(dto.paymentAccountId)
     await this.ensurePaymentSerialNoUnique(dto.paymentSerialNo)
     const paymentScreenshotUrl = files?.paymentScreenshot?.[0] ? `/uploads/${files.paymentScreenshot[0].filename}` : undefined
+    const chatRecordUrl = files?.chatRecordFile?.[0] ? `/uploads/${files.chatRecordFile[0].filename}` : undefined
     const evidenceFileUrls = files?.evidenceFiles?.length
       ? JSON.stringify(files.evidenceFiles.map((file) => `/uploads/${file.filename}`))
       : dto.evidenceFileUrls
     const orderDate = this.resolveOrderDate(currentUser, dto.orderDate)
-    const nextStatus = paymentAmount > 0 ? CustomerStatus.COMPLETED_THIRD_SALES : CustomerStatus.THIRD_SALES_FOLLOWING
+    const nextStatus = this.resolveCurrentStatus(dto.orderType, arrearsAmount)
+
+    if (!paymentScreenshotUrl) {
+      throw new BadRequestException('请上传付款截图')
+    }
+
+    if (dto.orderType !== 'DEPOSIT' && !chatRecordUrl) {
+      throw new BadRequestException('尾款或全款必须上传聊天记录截图')
+    }
 
     const createdOrderId = await this.prisma.$transaction(async (tx) => {
       const customer = existingCustomer
@@ -260,8 +294,11 @@ export class ThirdSalesService {
           customerId: customer.id,
           thirdSalesUserId: dto.thirdSalesUserId,
           sourceStage: customer.thirdSalesSourceStage ?? undefined,
+          orderType,
           productName: dto.productName,
           paymentAmount,
+          contractAmount,
+          arrearsAmount,
           rawPerformanceAmount,
           hearingCostAmount,
           performanceAmount,
@@ -269,6 +306,8 @@ export class ThirdSalesService {
           paymentAccountName: paymentAccount.accountName,
           paymentSerialNo: dto.paymentSerialNo,
           paymentScreenshotUrl,
+          chatRecordUrl,
+          paymentStatus,
           financeReviewStatus: FinanceReviewStatus.PENDING,
           orderDate,
           remark: dto.remark,
@@ -283,6 +322,7 @@ export class ThirdSalesService {
           currentOwnerId: dto.thirdSalesUserId,
           thirdPaymentAmount: { increment: paymentAmount },
           totalPaymentAmount: { increment: paymentAmount },
+          arrearsAmount: Math.max(Number(customer.arrearsAmount) - paymentAmount, 0),
           currentStatus: nextStatus,
         },
       })
@@ -304,6 +344,7 @@ export class ThirdSalesService {
     dto: CreateThirdSalesOrderDto,
     files?: {
       paymentScreenshot?: Array<{ filename: string }>
+      chatRecordFile?: Array<{ filename: string }>
       evidenceFiles?: Array<{ filename: string }>
     },
   ) {
@@ -337,21 +378,35 @@ export class ThirdSalesService {
     }
 
     const paymentAmount = this.parseAmount(dto.paymentAmount, '回款金额')
+    const contractAmount = this.parseAmount(dto.contractAmount, '应收金额')
+    const arrearsAmount = Math.max(contractAmount - paymentAmount, 0)
+    const orderType = this.resolveOrderType(dto.orderType)
+    const paymentStatus = this.resolvePaymentStatus(dto.orderType, arrearsAmount)
     const rawPerformanceAmount = paymentAmount
     const hearingCostAmount = await this.courtConfigService.getHearingCost()
     const performanceAmount = Math.max(rawPerformanceAmount - hearingCostAmount, 0)
     const paymentAccount = await this.paymentAccountsService.ensureAvailable(dto.paymentAccountId)
     await this.ensurePaymentSerialNoUnique(dto.paymentSerialNo, { stage: 'THIRD', id })
     const paymentScreenshotUrl = files?.paymentScreenshot?.[0] ? `/uploads/${files.paymentScreenshot[0].filename}` : order.paymentScreenshotUrl
+    const chatRecordUrl = files?.chatRecordFile?.[0] ? `/uploads/${files.chatRecordFile[0].filename}` : order.chatRecordUrl
     const evidenceFileUrls = files?.evidenceFiles?.length
       ? JSON.stringify(files.evidenceFiles.map((file) => `/uploads/${file.filename}`))
       : order.evidenceFileUrls
     const orderDate = this.resolveOrderDate(currentUser, dto.orderDate, order.orderDate)
-    const nextStatus = paymentAmount > 0 ? CustomerStatus.COMPLETED_THIRD_SALES : CustomerStatus.THIRD_SALES_FOLLOWING
+    const nextStatus = this.resolveCurrentStatus(dto.orderType, arrearsAmount)
+
+    if (!paymentScreenshotUrl) {
+      throw new BadRequestException('请上传付款截图')
+    }
+
+    if (dto.orderType !== 'DEPOSIT' && !chatRecordUrl) {
+      throw new BadRequestException('尾款或全款必须上传聊天记录截图')
+    }
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const nextThirdPaymentAmount = Number(customer.thirdPaymentAmount) - Number(order.paymentAmount) + paymentAmount
       const nextTotalPaymentAmount = Number(customer.totalPaymentAmount) - Number(order.paymentAmount) + paymentAmount
+      const nextCustomerArrearsAmount = Math.max(Number(customer.arrearsAmount) + Number(order.paymentAmount) - paymentAmount, 0)
 
       await tx.customer.update({
         where: { id: customer.id },
@@ -360,6 +415,7 @@ export class ThirdSalesService {
           currentOwnerId: dto.thirdSalesUserId,
           thirdPaymentAmount: nextThirdPaymentAmount,
           totalPaymentAmount: nextTotalPaymentAmount,
+          arrearsAmount: nextCustomerArrearsAmount,
           currentStatus: nextStatus,
         },
       })
@@ -368,8 +424,11 @@ export class ThirdSalesService {
         where: { id },
         data: {
           thirdSalesUserId: dto.thirdSalesUserId,
+          orderType,
           productName: dto.productName,
           paymentAmount,
+          contractAmount,
+          arrearsAmount,
           rawPerformanceAmount,
           hearingCostAmount,
           performanceAmount,
@@ -377,6 +436,8 @@ export class ThirdSalesService {
           paymentAccountName: paymentAccount.accountName,
           paymentSerialNo: dto.paymentSerialNo,
           paymentScreenshotUrl,
+          chatRecordUrl,
+          paymentStatus,
           orderDate,
           remark: dto.remark,
           evidenceFileUrls,
@@ -566,6 +627,7 @@ export class ThirdSalesService {
 
     const nextThirdPaymentAmount = Math.max(Number(order.customer.thirdPaymentAmount) - Number(order.paymentAmount), 0)
     const nextTotalPaymentAmount = Math.max(Number(order.customer.totalPaymentAmount) - Number(order.paymentAmount), 0)
+    const nextArrearsAmount = Number(order.customer.arrearsAmount) + Number(order.paymentAmount)
     const nextStatus = nextThirdPaymentAmount > 0 ? CustomerStatus.COMPLETED_THIRD_SALES : CustomerStatus.THIRD_SALES_FOLLOWING
 
     await this.prisma.$transaction(async (tx) => {
@@ -575,6 +637,7 @@ export class ThirdSalesService {
         data: {
           thirdPaymentAmount: nextThirdPaymentAmount,
           totalPaymentAmount: nextTotalPaymentAmount,
+          arrearsAmount: nextArrearsAmount,
           currentStatus: nextStatus,
         },
       })
@@ -668,10 +731,75 @@ export class ThirdSalesService {
   }
 
   private buildQueryWhere(query?: QueryOrderListDto): Prisma.ThirdSalesOrderWhereInput {
+    const customerName = query?.customerName?.trim()
+    const phone = query?.phone?.trim()
+    const firstSalesUserName = query?.firstSalesUserName?.trim()
     const paymentAccountName = query?.paymentAccountName?.trim()
     const paymentSerialNo = query?.paymentSerialNo?.trim()
+    const tailPaymentSerialNo = query?.tailPaymentSerialNo?.trim()
+    const paymentStatus = query?.paymentStatus?.trim()
 
     return {
+      ...(customerName
+        ? {
+            customer: {
+              name: {
+                contains: customerName,
+                mode: 'insensitive',
+              },
+            },
+          }
+        : {}),
+      ...(phone
+        ? {
+            customer: {
+              ...(customerName
+                ? {
+                    name: {
+                      contains: customerName,
+                      mode: 'insensitive',
+                    },
+                  }
+                : {}),
+              phone: {
+                contains: phone,
+                mode: 'insensitive',
+              },
+            },
+          }
+        : {}),
+      ...(firstSalesUserName
+        ? {
+            customer: {
+              ...((customerName || phone)
+                ? {
+                    ...(customerName
+                      ? {
+                          name: {
+                            contains: customerName,
+                            mode: 'insensitive',
+                          },
+                        }
+                      : {}),
+                    ...(phone
+                      ? {
+                          phone: {
+                            contains: phone,
+                            mode: 'insensitive',
+                          },
+                        }
+                      : {}),
+                  }
+                : {}),
+              firstSalesUser: {
+                realName: {
+                  contains: firstSalesUserName,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          }
+        : {}),
       ...(paymentAccountName
         ? {
             paymentAccountName: {
@@ -686,6 +814,26 @@ export class ThirdSalesService {
               contains: paymentSerialNo,
               mode: 'insensitive',
             },
+          }
+        : {}),
+      ...(paymentStatus
+        ? {
+            paymentStatus,
+          }
+        : {}),
+      ...(tailPaymentSerialNo
+        ? {
+            AND: [
+              {
+                orderType: FirstOrderType.TAIL,
+              },
+              {
+                paymentSerialNo: {
+                  contains: tailPaymentSerialNo,
+                  mode: 'insensitive',
+                },
+              },
+            ],
           }
         : {}),
     }
@@ -741,6 +889,24 @@ export class ThirdSalesService {
     return labels[status]
   }
 
+  private mapOrderType(orderType: FirstOrderType) {
+    const labels: Record<FirstOrderType, string> = {
+      DEPOSIT: '定金',
+      TAIL: '尾款',
+      FULL: '全款',
+    }
+
+    return labels[orderType]
+  }
+
+  private mapPaymentStatus(status?: string | null) {
+    if (status === 'PAID') {
+      return '已付清'
+    }
+
+    return '部分付款'
+  }
+
   private parseEvidenceFileUrls(value?: string | null) {
     if (!value) {
       return []
@@ -775,8 +941,11 @@ export class ThirdSalesService {
     id: number
     customerId: number
     sourceStage?: 'SECOND_SALES' | 'LEGAL' | null
+    orderType: FirstOrderType
     productName: string
     paymentAmount: Prisma.Decimal | number
+    contractAmount: Prisma.Decimal | number
+    arrearsAmount: Prisma.Decimal | number
     rawPerformanceAmount: Prisma.Decimal | number
     hearingCostAmount: Prisma.Decimal | number
     performanceAmount: Prisma.Decimal | number
@@ -784,6 +953,8 @@ export class ThirdSalesService {
     paymentAccountId?: number | null
     paymentSerialNo?: string | null
     paymentScreenshotUrl?: string | null
+    chatRecordUrl?: string | null
+    paymentStatus?: string | null
     remark?: string | null
     evidenceFileUrls?: string | null
     financeReviewStatus: FinanceReviewStatus
@@ -821,15 +992,20 @@ export class ThirdSalesService {
       firstSalesTeamName: this.resolveFirstSalesTeamName(order.customer.firstSalesUser),
       thirdSalesUserName: order.thirdSalesUser.realName,
       sourceStage: order.sourceStage ?? undefined,
+      orderType: this.mapOrderType(order.orderType),
       productName: order.productName,
       paymentAmount: Number(order.paymentAmount),
+      contractAmount: Number(order.contractAmount),
+      arrearsAmount: Number(order.arrearsAmount),
       rawPerformanceAmount: Number(order.rawPerformanceAmount),
       hearingCostAmount: Number(order.hearingCostAmount),
       performanceAmount: Number(order.performanceAmount),
+      paymentStatus: this.mapPaymentStatus(order.paymentStatus),
       paymentAccountName: order.paymentAccountName,
       paymentAccountId: order.paymentAccountId ?? undefined,
       paymentSerialNo: order.paymentSerialNo,
       paymentScreenshotUrl: this.filesService.toAccessUrl(order.paymentScreenshotUrl),
+      chatRecordUrl: this.filesService.toAccessUrl(order.chatRecordUrl),
       remark: order.remark,
       evidenceFileUrls: this.filesService.toAccessUrls(this.parseEvidenceFileUrls(order.evidenceFileUrls)),
       financeReviewStatus: order.financeReviewStatus,

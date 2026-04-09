@@ -29,8 +29,10 @@ const hearingCost = ref(0)
   const initialForm = (): ThirdSalesOrderPayload => ({
   phone: '',
   thirdSalesUserId: 0,
+  orderType: 'FULL',
   productName: '',
   paymentAmount: '',
+  contractAmount: '',
   paymentAccountId: 0,
   paymentSerialNo: '',
   orderDate: '',
@@ -51,6 +53,8 @@ const actualPerformanceAmount = computed(() => {
   const payment = Number(form.paymentAmount || 0)
   return Math.max(payment - hearingCost.value, 0)
 })
+
+const requiresChatRecord = computed(() => form.orderType !== 'DEPOSIT')
 
 const formatCurrency = (value?: number) => `¥${Number(value ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const sourceStageLabel = (value?: ThirdSalesCustomerSearchResult['thirdSalesSourceStage']) => {
@@ -105,8 +109,10 @@ const fillFormForEdit = (order: ThirdSalesOrderListItem) => {
   form.phone = order.phone
   form.customerName = order.customerName
   form.thirdSalesUserId = order.thirdSalesUserId || users.value.find((item) => item.realName === order.thirdSalesUserName)?.id || users.value[0]?.id || 0
+  form.orderType = (order.orderType === '定金' ? 'DEPOSIT' : order.orderType === '尾款' ? 'TAIL' : 'FULL')
   form.productName = order.productName
   form.paymentAmount = String(order.paymentAmount || '')
+  form.contractAmount = String(order.contractAmount || '')
   form.paymentAccountId = order.paymentAccountId || paymentAccounts.value[0]?.id || 0
   form.paymentSerialNo = order.paymentSerialNo || ''
   form.orderDate = order.orderDate ? order.orderDate.slice(0, 16) : ''
@@ -287,6 +293,11 @@ const submit = async () => {
     return
   }
 
+  if (!amountPattern.test(form.contractAmount.trim())) {
+    ElMessage.warning('请输入正确的应收金额')
+    return
+  }
+
   if (!form.paymentSerialNo.trim()) {
     ElMessage.warning('请输入付款单号')
     return
@@ -294,6 +305,11 @@ const submit = async () => {
 
   if (!form.paymentScreenshot && !isEditMode()) {
     ElMessage.warning('请上传付款截图')
+    return
+  }
+
+  if (requiresChatRecord.value && !form.chatRecordFile && !isEditMode()) {
+    ElMessage.warning('尾款或全款必须上传聊天记录截图')
     return
   }
 
@@ -378,7 +394,7 @@ defineExpose({ openForCustomer, openForEdit })
         <template #header>
           <div class="section-title">录单信息</div>
         </template>
-        <el-alert :title="isEditMode() ? '编辑时如不重新上传文件，将保留当前付款截图与证据' : '系统会自动按 付款金额 - 开庭成本 计算实际业绩；付款截图为必传。'" type="info" :closable="false" show-icon />
+        <el-alert :title="isEditMode() ? '编辑时如不重新上传文件，将保留当前付款截图、聊天记录与证据' : '系统会自动按 付款金额 - 开庭成本 计算实际业绩；定金单聊天记录可不传，尾款/全款必须上传聊天记录。'" type="info" :closable="false" show-icon />
 
         <el-form label-position="top" class="page-stack form-stack">
           <div class="form-grid compact-grid">
@@ -387,7 +403,15 @@ defineExpose({ openForCustomer, openForEdit })
                 <el-option v-for="item in users" :key="item.id" :label="item.realName" :value="item.id" />
               </el-select>
             </el-form-item>
+            <el-form-item label="订单类型">
+              <el-radio-group v-model="form.orderType">
+                <el-radio value="DEPOSIT">定金</el-radio>
+                <el-radio value="TAIL">尾款</el-radio>
+                <el-radio value="FULL">全款</el-radio>
+              </el-radio-group>
+            </el-form-item>
             <el-form-item label="服务项目"><el-input v-model="form.productName" placeholder="请输入开庭服务、庭审代理等项目" clearable /></el-form-item>
+            <el-form-item label="应收金额"><el-input v-model="form.contractAmount" placeholder="请输入应收金额" clearable /></el-form-item>
             <el-form-item label="付款金额"><el-input v-model="form.paymentAmount" placeholder="请输入付款金额" /></el-form-item>
             <el-form-item label="收款账户">
               <el-select v-model="form.paymentAccountId" placeholder="请选择收款账户" filterable>
@@ -400,6 +424,10 @@ defineExpose({ openForCustomer, openForEdit })
             </el-form-item>
           </div>
 
+          <div class="form-grid compact-grid">
+            <el-form-item label="剩余欠款"><el-input :model-value="String(Math.max(Number(form.contractAmount || 0) - Number(form.paymentAmount || 0), 0))" disabled /></el-form-item>
+          </div>
+
           <el-form-item label="付款截图" class="full-width">
             <div class="page-stack-sm full-width upload-panel card-like-panel">
               <div class="paste-upload-box" tabindex="0" @paste="handlePaymentScreenshotPaste">复制图片后，在这里按 Ctrl+V 粘贴付款截图</div>
@@ -407,6 +435,16 @@ defineExpose({ openForCustomer, openForEdit })
               <div v-if="isEditMode()" class="upload-tip">编辑时如不重新上传，将保留当前付款截图</div>
               <el-upload :auto-upload="false" :show-file-list="true" :limit="1" :file-list="paymentScreenshotList" :on-change="handlePaymentScreenshotChange" :on-remove="handlePaymentScreenshotRemove">
                 <el-button>上传付款截图</el-button>
+              </el-upload>
+            </div>
+          </el-form-item>
+
+          <el-form-item :label="requiresChatRecord ? '聊天记录截图（必传）' : '聊天记录截图（定金可不传）'" class="full-width">
+            <div class="page-stack-sm full-width upload-panel card-like-panel">
+              <div class="paste-upload-box" tabindex="0" @paste="handlePaymentScreenshotPaste">{{ requiresChatRecord ? '复制聊天截图后，在这里按 Ctrl+V 粘贴（尾款/全款必传）' : '当前为定金单，聊天截图可不上传' }}</div>
+              <div v-if="isEditMode()" class="upload-tip">编辑时如不重新上传，将保留当前聊天记录</div>
+              <el-upload :auto-upload="false" :show-file-list="true" :limit="1" :file-list="[]" :on-change="(file: any) => { form.chatRecordFile = file.raw || null }" :on-remove="() => { form.chatRecordFile = null }">
+                <el-button>上传聊天记录</el-button>
               </el-upload>
             </div>
           </el-form-item>

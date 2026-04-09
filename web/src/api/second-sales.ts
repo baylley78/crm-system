@@ -22,7 +22,17 @@ export const fetchSecondSalesUsers = async () => {
   return data
 }
 
-export const fetchSecondSalesOrders = async (params?: { page?: number; pageSize?: number; paymentAccountName?: string; paymentSerialNo?: string }) => {
+export const fetchSecondSalesOrders = async (params?: {
+  page?: number
+  pageSize?: number
+  customerName?: string
+  phone?: string
+  firstSalesUserName?: string
+  paymentAccountName?: string
+  paymentSerialNo?: string
+  tailPaymentSerialNo?: string
+  paymentStatus?: string
+}) => {
   const { data } = await request.get<PaginatedResponse<SecondSalesOrderListItem>>('/second-sales/orders', { params })
   return data
 }
@@ -46,6 +56,8 @@ export const createSecondSalesOrder = async (payload: SecondSalesOrderPayload) =
   const formData = new FormData()
   formData.append('phone', payload.phone)
   formData.append('secondSalesUserId', String(payload.secondSalesUserId))
+  formData.append('orderType', payload.orderType)
+  formData.append('contractAmount', String(payload.contractAmount))
   formData.append('secondPaymentAmount', String(payload.secondPaymentAmount))
   formData.append('paymentAccountId', String(payload.paymentAccountId))
   formData.append('includesHearing', String(payload.includesHearing))
@@ -95,6 +107,8 @@ export const updateSecondSalesOrder = async (id: number, payload: SecondSalesOrd
   const formData = new FormData()
   formData.append('phone', payload.phone)
   formData.append('secondSalesUserId', String(payload.secondSalesUserId))
+  formData.append('orderType', payload.orderType)
+  formData.append('contractAmount', String(payload.contractAmount))
   formData.append('secondPaymentAmount', String(payload.secondPaymentAmount))
   formData.append('paymentAccountId', String(payload.paymentAccountId))
   formData.append('includesHearing', String(payload.includesHearing))

@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { ApprovalStatus, ApprovalType, DataScope, Prisma, ReimbursementPaymentStatus } from '@prisma/client'
 import { PrismaService } from '../../prisma/prisma.service'
 import { DepartmentsService } from '../departments/departments.service'
+import { FilesService } from '../files/files.service'
 import type { AuthenticatedUser } from '../auth/auth.service'
 import { CreateApprovalDto, ApprovalTypeDto } from './dto/create-approval.dto'
 import { ApprovalActionDto, ApprovalActionTypeDto } from './dto/approval-action.dto'
@@ -13,6 +14,7 @@ export class ApprovalsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly departmentsService: DepartmentsService,
+    private readonly filesService: FilesService,
   ) {}
 
   async findAll(currentUser: AuthenticatedUser, query: QueryApprovalsDto) {
@@ -61,7 +63,13 @@ export class ApprovalsService {
     }
   }
 
-  async create(currentUser: AuthenticatedUser, dto: CreateApprovalDto) {
+  async create(
+    currentUser: AuthenticatedUser,
+    dto: CreateApprovalDto,
+    files?: {
+      reimbursementVoucher?: { filename: string }
+    },
+  ) {
     const applicant = await this.prisma.user.findUnique({ where: { id: currentUser.id } })
     if (!applicant) {
       throw new NotFoundException('申请人不存在')
@@ -74,6 +82,29 @@ export class ApprovalsService {
       const customer = await this.prisma.customer.findUnique({ where: { id: dto.customerId } })
       if (!customer) {
         throw new NotFoundException('关联客户不存在')
+      }
+    }
+
+    const reimbursementVoucherUrl = files?.reimbursementVoucher ? `/uploads/${files.reimbursementVoucher.filename}` : dto.reimbursementVoucherUrl
+
+    if (dto.approvalType === ApprovalTypeDto.REIMBURSEMENT) {
+      if (!dto.amount || dto.amount < 0) {
+        throw new BadRequestException('报销金额不能为空')
+      }
+      if (!dto.reimbursementAccountName?.trim()) {
+        throw new BadRequestException('收款账户不能为空')
+      }
+      if (!dto.reimbursementPayeeName?.trim()) {
+        throw new BadRequestException('姓名不能为空')
+      }
+      if (!dto.reimbursementBankName?.trim()) {
+        throw new BadRequestException('开户行不能为空')
+      }
+      if (!dto.reimbursementCardNo?.trim()) {
+        throw new BadRequestException('卡号不能为空')
+      }
+      if (!reimbursementVoucherUrl) {
+        throw new BadRequestException('请上传报销凭证')
       }
     }
 
@@ -94,6 +125,11 @@ export class ApprovalsService {
           punchDate: dto.approvalType === ApprovalTypeDto.PUNCH_CARD && dto.punchDate ? new Date(dto.punchDate) : undefined,
           punchTime: dto.approvalType === ApprovalTypeDto.PUNCH_CARD ? dto.punchTime : undefined,
           reason: dto.reason,
+          reimbursementAccountName: dto.approvalType === ApprovalTypeDto.REIMBURSEMENT ? dto.reimbursementAccountName?.trim() : undefined,
+          reimbursementPayeeName: dto.approvalType === ApprovalTypeDto.REIMBURSEMENT ? dto.reimbursementPayeeName?.trim() : undefined,
+          reimbursementBankName: dto.approvalType === ApprovalTypeDto.REIMBURSEMENT ? dto.reimbursementBankName?.trim() : undefined,
+          reimbursementCardNo: dto.approvalType === ApprovalTypeDto.REIMBURSEMENT ? dto.reimbursementCardNo?.trim() : undefined,
+          reimbursementVoucherUrl: dto.approvalType === ApprovalTypeDto.REIMBURSEMENT ? reimbursementVoucherUrl : undefined,
           remark: dto.remark,
           status: ApprovalStatus.PENDING,
           approverId: leaderChain[0].leaderUserId,
@@ -420,6 +456,11 @@ export class ApprovalsService {
       currentStep: number
       maxStep: number
       remark: string | null
+      reimbursementAccountName: string | null
+      reimbursementPayeeName: string | null
+      reimbursementBankName: string | null
+      reimbursementCardNo: string | null
+      reimbursementVoucherUrl: string | null
       approvedAt: Date | null
       paidAt: Date | null
       createdAt: Date
@@ -453,6 +494,11 @@ export class ApprovalsService {
       punchDate: item.punchDate?.toISOString(),
       punchTime: item.punchTime ?? undefined,
       reason: item.reason,
+      reimbursementAccountName: item.reimbursementAccountName ?? undefined,
+      reimbursementPayeeName: item.reimbursementPayeeName ?? undefined,
+      reimbursementBankName: item.reimbursementBankName ?? undefined,
+      reimbursementCardNo: item.reimbursementCardNo ?? undefined,
+      reimbursementVoucherUrl: this.filesService.toAccessUrl(item.reimbursementVoucherUrl),
       status: item.status,
       paymentStatus: item.paymentStatus,
       currentStep: item.currentStep,

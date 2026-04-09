@@ -958,15 +958,20 @@ export interface ThirdSalesOrderListItem {
   thirdSalesUserName: string
   thirdSalesUserId?: number
   sourceStage?: ThirdSalesSourceStage
+  orderType: string
   productName: string
   paymentAmount: number
+  contractAmount: number
+  arrearsAmount: number
   rawPerformanceAmount: number
   hearingCostAmount: number
   performanceAmount: number
+  paymentStatus?: string
   paymentAccountName?: string
   paymentAccountId?: number
   paymentSerialNo?: string
   paymentScreenshotUrl?: string
+  chatRecordUrl?: string
   financeReviewStatus: 'PENDING' | 'APPROVED' | 'REJECTED'
   financeReviewStatusLabel: string
   financeReviewerId?: number
@@ -982,12 +987,15 @@ export interface ThirdSalesOrderListItem {
 export interface ThirdSalesOrderPayload {
   phone: string
   thirdSalesUserId: number
+  orderType: 'DEPOSIT' | 'TAIL' | 'FULL'
   productName: string
   paymentAmount: string
+  contractAmount: string
   paymentAccountId: number
   paymentSerialNo: string
   orderDate?: string
   paymentScreenshot?: File | null
+  chatRecordFile?: File | null
   customerName?: string
   caseType?: string
   source?: string
@@ -1193,10 +1201,14 @@ export interface SecondSalesOrderListItem {
   secondSalesUserName: string
   secondSalesUserId?: number
   currentStatus?: string
+  orderType: string
+  contractAmount: number
   secondPaymentAmount: number
+  arrearsAmount: number
   includesHearing: boolean
   hearingCostAmount: number
   performanceAmount: number
+  paymentStatus?: string
   paymentAccountName?: string
   paymentAccountId?: number
   paymentSerialNo?: string
@@ -1217,6 +1229,8 @@ export interface SecondSalesOrderListItem {
 export interface SecondSalesOrderPayload {
   phone: string
   secondSalesUserId?: number
+  orderType: 'DEPOSIT' | 'TAIL' | 'FULL'
+  contractAmount: number
   secondPaymentAmount: number
   includesHearing: boolean
   paymentAccountId?: number
@@ -1322,6 +1336,11 @@ export interface ApprovalListItem {
   punchDate?: string
   punchTime?: string
   reason: string
+  reimbursementAccountName?: string
+  reimbursementPayeeName?: string
+  reimbursementBankName?: string
+  reimbursementCardNo?: string
+  reimbursementVoucherUrl?: string
   status: 'PENDING' | 'APPROVED' | 'REJECTED'
   paymentStatus?: 'UNPAID' | 'PAID'
   currentStep: number
@@ -1359,6 +1378,12 @@ export interface ApprovalCreatePayload {
   punchDate?: string
   punchTime?: string
   reason: string
+  reimbursementAccountName?: string
+  reimbursementPayeeName?: string
+  reimbursementBankName?: string
+  reimbursementCardNo?: string
+  reimbursementVoucher?: File | null
+  reimbursementVoucherUrl?: string
   remark?: string
 }
 

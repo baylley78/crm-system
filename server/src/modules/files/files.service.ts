@@ -98,7 +98,7 @@ export class FilesService {
       }),
       this.prisma.thirdSalesOrder.findFirst({
         where: {
-          OR: [{ paymentScreenshotUrl: fileUrl }, { evidenceFileUrls: { contains: fileUrl } }],
+          OR: [{ paymentScreenshotUrl: fileUrl }, { chatRecordUrl: fileUrl }, { evidenceFileUrls: { contains: fileUrl } }],
         },
         select: { customerId: true },
       }),

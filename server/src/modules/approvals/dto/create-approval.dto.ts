@@ -46,5 +46,25 @@ export class CreateApprovalDto {
 
   @IsOptional()
   @IsString()
+  reimbursementAccountName?: string
+
+  @IsOptional()
+  @IsString()
+  reimbursementPayeeName?: string
+
+  @IsOptional()
+  @IsString()
+  reimbursementBankName?: string
+
+  @IsOptional()
+  @IsString()
+  reimbursementCardNo?: string
+
+  @IsOptional()
+  @IsString()
+  reimbursementVoucherUrl?: string
+
+  @IsOptional()
+  @IsString()
   remark?: string
 }

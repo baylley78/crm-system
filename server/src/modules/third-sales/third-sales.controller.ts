@@ -69,7 +69,14 @@ export class ThirdSalesController {
   @Post('orders')
   @RequirePermission('thirdSales.create')
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'paymentScreenshot', maxCount: 1 }, { name: 'evidenceFiles', maxCount: 20 }], createThirdSalesUploadOptions()),
+    FileFieldsInterceptor(
+      [
+        { name: 'paymentScreenshot', maxCount: 1 },
+        { name: 'chatRecordFile', maxCount: 1 },
+        { name: 'evidenceFiles', maxCount: 20 },
+      ],
+      createThirdSalesUploadOptions(),
+    ),
   )
   createOrder(
     @CurrentUser() currentUser: AuthenticatedUser,
@@ -77,6 +84,7 @@ export class ThirdSalesController {
     @UploadedFiles()
     files: {
       paymentScreenshot?: Array<{ filename: string }>
+      chatRecordFile?: Array<{ filename: string }>
       evidenceFiles?: Array<{ filename: string }>
     },
   ) {
@@ -86,7 +94,14 @@ export class ThirdSalesController {
   @Patch('orders/:id')
   @RequirePermission('thirdSales.edit')
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'paymentScreenshot', maxCount: 1 }, { name: 'evidenceFiles', maxCount: 20 }], createThirdSalesUploadOptions()),
+    FileFieldsInterceptor(
+      [
+        { name: 'paymentScreenshot', maxCount: 1 },
+        { name: 'chatRecordFile', maxCount: 1 },
+        { name: 'evidenceFiles', maxCount: 20 },
+      ],
+      createThirdSalesUploadOptions(),
+    ),
   )
   updateOrder(
     @CurrentUser() currentUser: AuthenticatedUser,
@@ -95,6 +110,7 @@ export class ThirdSalesController {
     @UploadedFiles()
     files: {
       paymentScreenshot?: Array<{ filename: string }>
+      chatRecordFile?: Array<{ filename: string }>
       evidenceFiles?: Array<{ filename: string }>
     },
   ) {

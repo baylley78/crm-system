@@ -41,6 +41,12 @@ const form = reactive<ApprovalCreatePayload>({
   punchDate: '',
   punchTime: '',
   reason: '',
+  reimbursementAccountName: '',
+  reimbursementPayeeName: '',
+  reimbursementBankName: '',
+  reimbursementCardNo: '',
+  reimbursementVoucher: null,
+  reimbursementVoucherUrl: '',
   remark: '',
 })
 const actionForm = reactive<ApprovalActionPayload>({
@@ -97,6 +103,12 @@ const resetForm = () => {
   form.punchDate = ''
   form.punchTime = ''
   form.reason = ''
+  form.reimbursementAccountName = ''
+  form.reimbursementPayeeName = ''
+  form.reimbursementBankName = ''
+  form.reimbursementCardNo = ''
+  form.reimbursementVoucher = null
+  form.reimbursementVoucherUrl = ''
   form.remark = ''
 }
 
@@ -152,6 +164,11 @@ const buildCreatePayload = (): ApprovalCreatePayload => {
 
   if (props.approvalType === 'REIMBURSEMENT') {
     payload.amount = form.amount
+    payload.reimbursementAccountName = form.reimbursementAccountName?.trim()
+    payload.reimbursementPayeeName = form.reimbursementPayeeName?.trim()
+    payload.reimbursementBankName = form.reimbursementBankName?.trim()
+    payload.reimbursementCardNo = form.reimbursementCardNo?.trim()
+    payload.reimbursementVoucher = form.reimbursementVoucher || null
   } else if (props.approvalType === 'LEAVE') {
     payload.leaveDays = form.leaveDays
   } else {
@@ -352,6 +369,31 @@ onMounted(loadApprovals)
           <el-form-item v-if="props.approvalType === 'REIMBURSEMENT'" label="报销金额">
             <el-input-number v-model="form.amount" :min="0" :precision="2" style="width: 100%" />
           </el-form-item>
+          <template v-if="props.approvalType === 'REIMBURSEMENT'">
+            <el-form-item label="申请人">
+              <el-input :model-value="authStorage.getUser()?.realName || '-'" disabled />
+            </el-form-item>
+            <el-form-item label="申请时间">
+              <el-input :model-value="new Date().toLocaleString('zh-CN')" disabled />
+            </el-form-item>
+            <el-form-item label="收款账户">
+              <el-input v-model="form.reimbursementAccountName" placeholder="请输入收款账户" />
+            </el-form-item>
+            <el-form-item label="姓名">
+              <el-input v-model="form.reimbursementPayeeName" placeholder="请输入姓名" />
+            </el-form-item>
+            <el-form-item label="开户行">
+              <el-input v-model="form.reimbursementBankName" placeholder="请输入开户行" />
+            </el-form-item>
+            <el-form-item label="卡号">
+              <el-input v-model="form.reimbursementCardNo" placeholder="请输入卡号" />
+            </el-form-item>
+            <el-form-item label="报销凭证" class="full-width">
+              <el-upload :auto-upload="false" :limit="1" :show-file-list="true" :on-change="(file: any) => { form.reimbursementVoucher = file.raw || null }" :on-remove="() => { form.reimbursementVoucher = null }">
+                <el-button>上传凭证</el-button>
+              </el-upload>
+            </el-form-item>
+          </template>
           <el-form-item v-else-if="props.approvalType === 'LEAVE'" label="请假天数">
             <el-input-number v-model="form.leaveDays" :min="0" :precision="1" style="width: 100%" />
           </el-form-item>

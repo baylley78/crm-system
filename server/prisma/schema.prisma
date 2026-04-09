@@ -391,7 +391,10 @@ model SecondSalesOrder {
   customerId           Int
   secondSalesUserId    Int
   assignmentId         Int?
+  orderType            FirstOrderType         @default(FULL)
   secondPaymentAmount  Decimal                @default(0)
+  contractAmount       Decimal                @default(0)
+  arrearsAmount        Decimal                @default(0)
   includesHearing      Boolean                @default(false)
   hearingCostAmount    Decimal                @default(0)
   performanceAmount    Decimal                @default(0)
@@ -401,6 +404,7 @@ model SecondSalesOrder {
   paymentScreenshotUrl String?
   chatRecordUrl        String?
   evidenceFileUrls     String?
+  paymentStatus        String?
   remark               String?
   financeReviewStatus  FinanceReviewStatus    @default(PENDING)
   financeReviewerId    Int?
@@ -583,8 +587,11 @@ model ThirdSalesOrder {
   customerId          Int
   thirdSalesUserId    Int
   sourceStage         ThirdSalesSourceStage?
+  orderType           FirstOrderType      @default(FULL)
   productName         String
   paymentAmount       Decimal             @default(0)
+  contractAmount      Decimal             @default(0)
+  arrearsAmount       Decimal             @default(0)
   rawPerformanceAmount Decimal            @default(0)
   hearingCostAmount   Decimal             @default(0)
   performanceAmount   Decimal             @default(0)
@@ -592,6 +599,8 @@ model ThirdSalesOrder {
   paymentAccountName  String?
   paymentSerialNo     String?             @unique
   paymentScreenshotUrl String?
+  chatRecordUrl       String?
+  paymentStatus       String?
   financeReviewStatus FinanceReviewStatus @default(PENDING)
   financeReviewerId   Int?
   financeReviewedAt   DateTime?
@@ -649,32 +658,37 @@ model DingTalkReportConfig {
 }
 
 model Approval {
-  id                Int                        @id @default(autoincrement())
-  applicantId       Int
-  customerId        Int?
-  approvalType      ApprovalType
-  title             String
-  amount            Decimal?                   @default(0)
-  leaveDays         Decimal?                   @default(0)
-  punchDate         DateTime?
-  punchTime         String?
-  reason            String
-  status            ApprovalStatus             @default(PENDING)
-  paymentStatus     ReimbursementPaymentStatus @default(UNPAID)
-  approverId        Int?
-  paidById          Int?
-  currentStep       Int                        @default(1)
-  maxStep           Int                        @default(1)
-  approvedAt        DateTime?
-  paidAt            DateTime?
-  remark            String?
-  applicant         User                       @relation("Applicant", fields: [applicantId], references: [id])
-  customer          Customer?                  @relation(fields: [customerId], references: [id])
-  approver          User?                      @relation("Approver", fields: [approverId], references: [id])
-  paidBy            User?                      @relation("PaidBy", fields: [paidById], references: [id])
-  steps             ApprovalStep[]
-  createdAt         DateTime                   @default(now())
-  updatedAt         DateTime                   @updatedAt
+  id                       Int                        @id @default(autoincrement())
+  applicantId              Int
+  customerId               Int?
+  approvalType             ApprovalType
+  title                    String
+  amount                   Decimal?                   @default(0)
+  leaveDays                Decimal?                   @default(0)
+  punchDate                DateTime?
+  punchTime                String?
+  reason                   String
+  reimbursementAccountName String?
+  reimbursementPayeeName   String?
+  reimbursementBankName    String?
+  reimbursementCardNo      String?
+  reimbursementVoucherUrl  String?
+  status                   ApprovalStatus             @default(PENDING)
+  paymentStatus            ReimbursementPaymentStatus @default(UNPAID)
+  approverId               Int?
+  paidById                 Int?
+  currentStep              Int                        @default(1)
+  maxStep                  Int                        @default(1)
+  approvedAt               DateTime?
+  paidAt                   DateTime?
+  remark                   String?
+  applicant                User                       @relation("Applicant", fields: [applicantId], references: [id])
+  customer                 Customer?                  @relation(fields: [customerId], references: [id])
+  approver                 User?                      @relation("Approver", fields: [approverId], references: [id])
+  paidBy                   User?                      @relation("PaidBy", fields: [paidById], references: [id])
+  steps                    ApprovalStep[]
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
 }
 
 model ApprovalStep {

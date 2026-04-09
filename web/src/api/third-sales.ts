@@ -15,7 +15,17 @@ export const fetchThirdSalesUsers = async () => {
   return data
 }
 
-export const fetchThirdSalesOrders = async (params?: { page?: number; pageSize?: number; paymentAccountName?: string; paymentSerialNo?: string }) => {
+export const fetchThirdSalesOrders = async (params?: {
+  page?: number
+  pageSize?: number
+  customerName?: string
+  phone?: string
+  firstSalesUserName?: string
+  paymentAccountName?: string
+  paymentSerialNo?: string
+  tailPaymentSerialNo?: string
+  paymentStatus?: string
+}) => {
   const { data } = await request.get<PaginatedResponse<ThirdSalesOrderListItem>>('/third-sales/orders', { params })
   return data
 }
@@ -34,8 +44,10 @@ export const createThirdSalesOrder = async (payload: ThirdSalesOrderPayload) => 
   const formData = new FormData()
   formData.append('phone', payload.phone)
   formData.append('thirdSalesUserId', String(payload.thirdSalesUserId))
+  formData.append('orderType', payload.orderType)
   formData.append('productName', payload.productName)
   formData.append('paymentAmount', payload.paymentAmount)
+  formData.append('contractAmount', payload.contractAmount)
   formData.append('paymentAccountId', String(payload.paymentAccountId))
   formData.append('paymentSerialNo', payload.paymentSerialNo)
   if (payload.orderDate) {
@@ -43,6 +55,9 @@ export const createThirdSalesOrder = async (payload: ThirdSalesOrderPayload) => 
   }
   if (payload.paymentScreenshot) {
     formData.append('paymentScreenshot', payload.paymentScreenshot)
+  }
+  if (payload.chatRecordFile) {
+    formData.append('chatRecordFile', payload.chatRecordFile)
   }
   if (payload.customerName) {
     formData.append('customerName', payload.customerName)
@@ -71,8 +86,10 @@ export const updateThirdSalesOrder = async (id: number, payload: ThirdSalesOrder
   const formData = new FormData()
   formData.append('phone', payload.phone)
   formData.append('thirdSalesUserId', String(payload.thirdSalesUserId))
+  formData.append('orderType', payload.orderType)
   formData.append('productName', payload.productName)
   formData.append('paymentAmount', payload.paymentAmount)
+  formData.append('contractAmount', payload.contractAmount)
   formData.append('paymentAccountId', String(payload.paymentAccountId))
   formData.append('paymentSerialNo', payload.paymentSerialNo)
   if (payload.orderDate) {
@@ -80,6 +97,9 @@ export const updateThirdSalesOrder = async (id: number, payload: ThirdSalesOrder
   }
   if (payload.paymentScreenshot) {
     formData.append('paymentScreenshot', payload.paymentScreenshot)
+  }
+  if (payload.chatRecordFile) {
+    formData.append('chatRecordFile', payload.chatRecordFile)
   }
   if (payload.customerName) {
     formData.append('customerName', payload.customerName)

@@ -36,6 +36,8 @@ const hearingCost = ref(0)
 const initialForm = (): SecondSalesOrderPayload => ({
   phone: '',
   secondSalesUserId: undefined as unknown as number,
+  orderType: 'FULL',
+  contractAmount: 0,
   secondPaymentAmount: 0,
   includesHearing: false,
   paymentAccountId: undefined as unknown as number,
@@ -59,6 +61,20 @@ const isEditMode = () => Boolean(editingOrder.value)
 const actualPerformanceAmount = computed(() => {
   const paymentAmount = Number(paymentAmountText.value.trim() || 0)
   return Math.max(paymentAmount - (form.includesHearing ? hearingCost.value : 0), 0)
+})
+
+const orderTypeLabelMap = {
+  DEPOSIT: '定金',
+  TAIL: '尾款',
+  FULL: '全款',
+} as const
+
+const requiresChatRecord = computed(() => form.orderType !== 'DEPOSIT')
+const contractAmountText = computed({
+  get: () => String(form.contractAmount || ''),
+  set: (value: string) => {
+    form.contractAmount = Number(value || 0)
+  },
 })
 
 const isPendingStatus = (status: string) => status === '待分配二销' || status === 'PENDING_SECOND_SALES_ASSIGNMENT'
@@ -122,6 +138,8 @@ const fillFormForEdit = (order: SecondSalesOrderListItem) => {
   form.phone = order.phone
   form.customerName = order.customerName
   form.secondSalesUserId = order.secondSalesUserId || users.value.find((item) => item.realName === order.secondSalesUserName)?.id || authStorage.getUser()?.id || users.value[0]?.id || undefined
+  form.orderType = (order.orderType === '定金' ? 'DEPOSIT' : order.orderType === '尾款' ? 'TAIL' : 'FULL')
+  form.contractAmount = order.contractAmount
   form.secondPaymentAmount = order.secondPaymentAmount
   form.includesHearing = order.includesHearing
   form.paymentAccountId = order.paymentAccountId || paymentAccounts.value[0]?.id || undefined
@@ -379,6 +397,11 @@ const submit = async () => {
     return
   }
 
+  if (Number.isNaN(Number(form.contractAmount)) || Number(form.contractAmount) <= 0) {
+    ElMessage.warning('请输入正确的应收金额')
+    return
+  }
+
   form.secondPaymentAmount = parsedPaymentAmount
 
   if (!form.paymentSerialNo.trim()) {
@@ -391,8 +414,8 @@ const submit = async () => {
     return
   }
 
-  if (!form.chatRecordFile && !isEditMode()) {
-    ElMessage.warning('请上传聊天记录截图')
+  if (requiresChatRecord.value && !form.chatRecordFile && !isEditMode()) {
+    ElMessage.warning('尾款或全款必须上传聊天记录截图')
     return
   }
 
@@ -509,8 +532,18 @@ defineExpose({ openForCustomer, openForEdit })
                 <el-option v-for="item in users" :key="item.id" :label="item.realName" :value="item.id" />
               </el-select>
             </el-form-item>
-            <el-form-item label="付款金额">
-              <el-input v-model="paymentAmountText" placeholder="请输入付款金额" clearable />
+            <el-form-item label="订单类型">
+              <el-radio-group v-model="form.orderType">
+                <el-radio value="DEPOSIT">定金</el-radio>
+                <el-radio value="TAIL">尾款</el-radio>
+                <el-radio value="FULL">全款</el-radio>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item label="应收金额">
+              <el-input v-model="contractAmountText" placeholder="请输入应收金额" clearable />
+            </el-form-item>
+            <el-form-item label="本次付款金额">
+              <el-input v-model="paymentAmountText" placeholder="请输入本次付款金额" clearable />
             </el-form-item>
             <el-form-item label="是否包含开庭">
               <el-switch v-model="form.includesHearing" />
@@ -520,6 +553,9 @@ defineExpose({ openForCustomer, openForEdit })
           <div class="form-grid compact-grid">
             <el-form-item label="开庭成本">
               <el-input :model-value="form.includesHearing ? String(hearingCost) : '0'" disabled />
+            </el-form-item>
+            <el-form-item label="剩余欠款">
+              <el-input :model-value="String(Math.max(Number(form.contractAmount || 0) - Number(paymentAmountText || 0), 0))" disabled />
             </el-form-item>
             <el-form-item label="实际业绩">
               <el-input :model-value="String(actualPerformanceAmount)" disabled />
@@ -537,10 +573,11 @@ defineExpose({ openForCustomer, openForEdit })
           </el-form-item>
 
           <el-form-item label="成功后流转">
-            <el-radio-group v-model="form.nextStage">
+            <el-radio-group v-model="form.nextStage" :disabled="form.orderType === 'DEPOSIT'">
               <el-radio value="LEGAL">转法务</el-radio>
               <el-radio value="THIRD_SALES">转三销</el-radio>
             </el-radio-group>
+            <div class="upload-tip">{{ form.orderType === 'DEPOSIT' ? '定金单不提前流转，待后续补尾款后再流转。' : `当前为${orderTypeLabelMap[form.orderType]}单，保存后按所选节点流转。` }}</div>
           </el-form-item>
 
           <el-form-item v-if="canEditOrderTime()" label="录单时间">
@@ -572,10 +609,10 @@ defineExpose({ openForCustomer, openForEdit })
               </div>
             </el-form-item>
 
-            <el-form-item label="聊天记录截图" class="upload-item">
+            <el-form-item :label="requiresChatRecord ? '聊天记录截图（必传）' : '聊天记录截图（定金可不传）'" class="upload-item">
               <div class="page-stack-sm full-width upload-panel card-like-panel">
                 <div class="paste-upload-box" tabindex="0" @paste="handleChatRecordPaste">
-                  复制聊天截图后，在这里按 Ctrl+V 直接粘贴
+                  {{ requiresChatRecord ? '复制聊天截图后，在这里按 Ctrl+V 直接粘贴（尾款/全款必传）' : '当前为定金单，聊天截图可先不上传；如已复制也可直接粘贴' }}
                 </div>
                 <img v-if="chatRecordPreviewUrl" :src="chatRecordPreviewUrl" alt="聊天截图预览" class="paste-image-preview" />
                 <div v-if="isEditMode()" class="upload-tip">编辑时如不重新上传，将保留当前聊天记录</div>

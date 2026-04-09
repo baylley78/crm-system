@@ -31,12 +31,22 @@ export class CreateSecondSalesOrderDto {
   @Type(() => Number)
   secondSalesUserId: number
 
+  @IsString()
+  @IsIn(['DEPOSIT', 'TAIL', 'FULL'])
+  orderType: 'DEPOSIT' | 'TAIL' | 'FULL'
+
   @IsNumber()
   @Min(0)
   @Type(() => Number)
   secondPaymentAmount: number
 
   @IsNumber()
+  @Min(0)
+  @Type(() => Number)
+  contractAmount: number
+
+  @IsNumber()
+  @Min(0)
   @Type(() => Number)
   paymentAccountId: number
 

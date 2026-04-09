@@ -18,6 +18,21 @@ export class QueryOrderListDto {
   @IsOptional()
   @Type(() => String)
   @IsString()
+  customerName?: string
+
+  @IsOptional()
+  @Type(() => String)
+  @IsString()
+  phone?: string
+
+  @IsOptional()
+  @Type(() => String)
+  @IsString()
+  firstSalesUserName?: string
+
+  @IsOptional()
+  @Type(() => String)
+  @IsString()
   paymentAccountName?: string
 
   @IsOptional()
@@ -29,4 +44,9 @@ export class QueryOrderListDto {
   @Type(() => String)
   @IsString()
   tailPaymentSerialNo?: string
+
+  @IsOptional()
+  @Type(() => String)
+  @IsString()
+  paymentStatus?: string
 }

@@ -24,8 +24,13 @@ const previewImageUrl = ref('')
 const previewFileUrl = ref('')
 const previewFailed = ref(false)
 const searchForm = ref({
+  customerName: '',
+  phone: '',
+  firstSalesUserName: '',
   paymentAccountName: '',
   paymentSerialNo: '',
+  tailPaymentSerialNo: '',
+  paymentStatus: '',
 })
 const currentPage = ref(1)
 const pageSize = ref(30)
@@ -76,8 +81,13 @@ const loadOrders = async () => {
     const result = await fetchSecondSalesOrders({
       page: currentPage.value,
       pageSize: pageSize.value,
+      customerName: searchForm.value.customerName || undefined,
+      phone: searchForm.value.phone || undefined,
+      firstSalesUserName: searchForm.value.firstSalesUserName || undefined,
       paymentAccountName: searchForm.value.paymentAccountName || undefined,
       paymentSerialNo: searchForm.value.paymentSerialNo || undefined,
+      tailPaymentSerialNo: searchForm.value.tailPaymentSerialNo || undefined,
+      paymentStatus: searchForm.value.paymentStatus || undefined,
     })
     orders.value = result.items
     total.value = result.total
@@ -92,8 +102,13 @@ const handleSearch = () => {
 }
 
 const resetSearch = () => {
+  searchForm.value.customerName = ''
+  searchForm.value.phone = ''
+  searchForm.value.firstSalesUserName = ''
   searchForm.value.paymentAccountName = ''
   searchForm.value.paymentSerialNo = ''
+  searchForm.value.tailPaymentSerialNo = ''
+  searchForm.value.paymentStatus = ''
   currentPage.value = 1
   loadOrders()
 }
@@ -217,11 +232,29 @@ onMounted(loadOrders)
         <el-card shadow="never">
           <template #header>搜索条件</template>
           <el-form inline>
+            <el-form-item label="客户姓名">
+              <el-input v-model="searchForm.customerName" placeholder="请输入客户姓名" clearable />
+            </el-form-item>
+            <el-form-item label="手机号码">
+              <el-input v-model="searchForm.phone" placeholder="请输入手机号码" clearable />
+            </el-form-item>
+            <el-form-item label="一销人员">
+              <el-input v-model="searchForm.firstSalesUserName" placeholder="请输入一销人员" clearable />
+            </el-form-item>
             <el-form-item label="收款账户">
               <el-input v-model="searchForm.paymentAccountName" placeholder="请输入收款账户" clearable />
             </el-form-item>
             <el-form-item label="付款单号">
               <el-input v-model="searchForm.paymentSerialNo" placeholder="请输入付款单号" clearable />
+            </el-form-item>
+            <el-form-item label="尾款单号">
+              <el-input v-model="searchForm.tailPaymentSerialNo" placeholder="请输入尾款单号" clearable />
+            </el-form-item>
+            <el-form-item label="付款状态">
+              <el-select v-model="searchForm.paymentStatus" placeholder="请选择付款状态" clearable>
+                <el-option label="部分付款" value="PARTIAL" />
+                <el-option label="已付清" value="PAID" />
+              </el-select>
             </el-form-item>
             <el-form-item>
               <el-button type="primary" @click="handleSearch">搜索</el-button>

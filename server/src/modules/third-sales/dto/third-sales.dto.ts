@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer'
-import { IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator'
+import { IsDateString, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator'
 
 export class SearchThirdSalesCustomerDto {
   @IsString()
@@ -17,12 +17,20 @@ export class CreateThirdSalesOrderDto {
   thirdSalesUserId: number
 
   @IsString()
+  @IsIn(['DEPOSIT', 'TAIL', 'FULL'])
+  orderType: 'DEPOSIT' | 'TAIL' | 'FULL'
+
+  @IsString()
   @IsNotEmpty()
   productName: string
 
   @IsString()
   @IsNotEmpty()
   paymentAmount: string
+
+  @IsString()
+  @IsNotEmpty()
+  contractAmount: string
 
   @IsNumber()
   @Type(() => Number)
