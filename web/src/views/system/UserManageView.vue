@@ -273,12 +273,12 @@ const removeUser = async (user: SystemUserItem) => {
   }
 
   try {
-    await ElMessageBox.confirm(`确认删除账号“${user.realName}”吗？删除后不可恢复。`, '删除确认', {
+    await ElMessageBox.confirm(`确认删除账号“${user.realName}”吗？若该账号已有业务数据，系统将自动改为离职而非彻底删除。`, '删除确认', {
       type: 'warning',
       confirmButtonText: '删除',
     })
-    await deleteSystemUser(user.id)
-    ElMessage.success('用户已删除')
+    const result = await deleteSystemUser(user.id)
+    ElMessage.success(result.archived ? (result.message || '该用户已有业务数据，已自动改为离职') : '用户已删除')
     await loadUsers()
   } catch (error: any) {
     if (error === 'cancel') {

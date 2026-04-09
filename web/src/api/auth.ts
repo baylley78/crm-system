@@ -86,7 +86,7 @@ export const updateSystemUsersStatusBatch = async (payload: BatchUpdateUserStatu
 }
 
 export const deleteSystemUser = async (id: number) => {
-  const { data } = await request.delete<{ success: boolean }>(`/auth/users/${id}`)
+  const { data } = await request.delete<{ success: boolean; archived?: boolean; message?: string }>(`/auth/users/${id}`)
   return data
 }
 
