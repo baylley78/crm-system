@@ -220,9 +220,14 @@ onMounted(loadOrders)
           <el-table-column label="实际业绩" min-width="120">
             <template #default="scope">{{ scope.row.performanceAmount }}</template>
           </el-table-column>
-          <el-table-column label="收款账户" min-width="220">
+          <el-table-column label="收款账户" min-width="180">
             <template #default="scope">
-              {{ scope.row.paymentAccountName || '-' }} / {{ scope.row.paymentSerialNo || '-' }}
+              {{ scope.row.paymentAccountName || '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="付款单号" min-width="160">
+            <template #default="scope">
+              {{ scope.row.paymentSerialNo || '-' }}
             </template>
           </el-table-column>
           <el-table-column label="财务审核" min-width="120">

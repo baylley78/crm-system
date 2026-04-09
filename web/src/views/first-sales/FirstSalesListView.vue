@@ -473,9 +473,14 @@ onMounted(loadOrders)
               <el-table-column label="案件类型" prop="caseType" min-width="120" />
               <el-table-column label="意向等级" prop="intentionLevel" min-width="100" />
               <el-table-column label="标的金额" prop="targetAmount" min-width="120" />
-              <el-table-column label="收款账户" min-width="220">
+              <el-table-column label="收款账户" min-width="180">
                 <template #default="scope">
-                  {{ scope.row.paymentAccountName || '-' }} / {{ scope.row.paymentSerialNo || '-' }}
+                  {{ scope.row.paymentAccountName || '-' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="付款单号" min-width="160">
+                <template #default="scope">
+                  {{ scope.row.paymentSerialNo || '-' }}
                 </template>
               </el-table-column>
               <el-table-column label="付款截图" min-width="120">
