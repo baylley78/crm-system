@@ -446,6 +446,46 @@ export class SecondSalesService {
     return updatedOrders.map((order) => this.mapOrder(order))
   }
 
+  async removeOrder(currentUser: AuthenticatedUser, id: number) {
+    const order = await this.prisma.secondSalesOrder.findFirst({
+      where: {
+        id,
+        ...(await this.buildVisibilityWhere(currentUser)),
+      },
+      include: {
+        customer: true,
+      },
+    })
+
+    if (!order) {
+      const exists = await this.prisma.secondSalesOrder.findUnique({ where: { id }, select: { id: true } })
+      if (exists) {
+        throw new ForbiddenException('无权删除该二销订单')
+      }
+      throw new NotFoundException('二销订单不存在')
+    }
+
+    const nextSecondPaymentAmount = Math.max(Number(order.customer.secondPaymentAmount) - Number(order.secondPaymentAmount), 0)
+    const nextTotalPaymentAmount = Math.max(Number(order.customer.totalPaymentAmount) - Number(order.secondPaymentAmount), 0)
+    const nextArrearsAmount = Number(order.customer.arrearsAmount) + Number(order.secondPaymentAmount)
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.secondSalesOrder.delete({ where: { id: order.id } })
+      await tx.customer.update({
+        where: { id: order.customerId },
+        data: {
+          secondPaymentAmount: nextSecondPaymentAmount,
+          totalPaymentAmount: nextTotalPaymentAmount,
+          arrearsAmount: nextArrearsAmount,
+          currentStatus: CustomerStatus.SECOND_SALES_FOLLOWING,
+          thirdSalesSourceStage: null,
+        },
+      })
+    })
+
+    return { success: true }
+  }
+
   private resolveOrderDate(currentUser: AuthenticatedUser, input?: string, fallback?: Date | null) {
     if (!input) {
       return fallback ?? new Date()

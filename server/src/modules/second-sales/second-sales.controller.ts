@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, UploadedFiles, UseGuards, UseInterceptors, BadRequestException, ForbiddenException, NotFoundException, Param, Query } from '@nestjs/common'
+import { Body, Controller, Get, Patch, Post, UploadedFiles, UseGuards, UseInterceptors, BadRequestException, ForbiddenException, NotFoundException, Param, Query, Delete } from '@nestjs/common'
 import { CurrentUser } from '../../common/auth/current-user.decorator'
 import { FileFieldsInterceptor } from '@nestjs/platform-express'
 import { diskStorage } from 'multer'
@@ -338,6 +338,12 @@ export class SecondSalesController {
     },
   ) {
     return this.secondSalesService.updateOrder(currentUser, Number(id), dto, files)
+  }
+
+  @Delete('orders/:id')
+  @RequirePermission('secondSales.delete')
+  async removeOrder(@CurrentUser() currentUser: AuthenticatedUser, @Param('id') id: string) {
+    return this.secondSalesService.removeOrder(currentUser, Number(id))
   }
 
   @Post('orders/:id/finance-review')

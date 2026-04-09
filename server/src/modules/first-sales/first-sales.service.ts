@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common'
 import { CustomerStatus, DataScope, FinanceReviewStatus, Prisma } from '@prisma/client'
 import { PrismaService } from '../../prisma/prisma.service'
 import { DepartmentsService } from '../departments/departments.service'
@@ -374,6 +374,70 @@ export class FirstSalesService implements OnModuleInit {
     })
 
     return this.mapOrder(updated)
+  }
+
+  async removeOrder(currentUser: AuthenticatedUser, id: number) {
+    const order = await this.prisma.firstSalesOrder.findFirst({
+      where: {
+        id,
+        ...(await this.buildVisibilityWhere(currentUser)),
+      },
+      include: {
+        customer: {
+          include: {
+            firstSalesOrders: {
+              select: {
+                id: true,
+                paymentAmount: true,
+                arrearsAmount: true,
+                targetAmount: true,
+                salesUserId: true,
+                chatRecordUrl: true,
+                createdAt: true,
+              },
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            },
+          },
+        },
+      },
+    })
+
+    if (!order) {
+      const exists = await this.prisma.firstSalesOrder.findUnique({ where: { id }, select: { id: true } })
+      if (exists) {
+        throw new ForbiddenException('无权删除该一销订单')
+      }
+      throw new NotFoundException('一销订单不存在')
+    }
+
+    const remainingOrders = order.customer.firstSalesOrders.filter((item) => item.id !== order.id)
+    const nextFirstPaymentAmount = remainingOrders.reduce((sum, item) => sum + Number(item.paymentAmount), 0)
+    const nextArrearsAmount = remainingOrders.length ? Number(remainingOrders[remainingOrders.length - 1].arrearsAmount) : 0
+    const latestOrder = remainingOrders[0]
+    const latestChatRecordUrl = remainingOrders.find((item) => item.chatRecordUrl)?.chatRecordUrl || null
+    const nextTargetAmount = latestOrder ? Number(latestOrder.targetAmount) : 0
+    const nextFirstSalesUserId = latestOrder?.salesUserId ?? null
+    const nextTotalPaymentAmount = Math.max(Number(order.customer.totalPaymentAmount) - Number(order.paymentAmount), 0)
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.firstSalesOrder.delete({ where: { id: order.id } })
+      await tx.customer.update({
+        where: { id: order.customerId },
+        data: {
+          firstSalesUserId: nextFirstSalesUserId,
+          currentOwnerId: nextFirstSalesUserId,
+          targetAmount: nextTargetAmount,
+          firstPaymentAmount: nextFirstPaymentAmount,
+          totalPaymentAmount: nextTotalPaymentAmount,
+          arrearsAmount: nextArrearsAmount,
+          isTailPaymentCompleted: nextArrearsAmount === 0,
+          currentStatus: this.resolveCustomerStatus(nextArrearsAmount),
+          firstSalesChatRecordUrl: latestChatRecordUrl,
+        },
+      })
+    })
+
+    return { success: true }
   }
 
   async findOrders(currentUser: AuthenticatedUser) {

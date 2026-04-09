@@ -542,6 +542,44 @@ export class ThirdSalesService {
     return updatedOrders.map((order) => this.mapOrder(order))
   }
 
+  async removeOrder(currentUser: AuthenticatedUser, id: number) {
+    const order = await this.prisma.thirdSalesOrder.findFirst({
+      where: {
+        id,
+        ...(await this.buildVisibilityWhere(currentUser)),
+      },
+      include: {
+        customer: true,
+      },
+    })
+
+    if (!order) {
+      const exists = await this.prisma.thirdSalesOrder.findUnique({ where: { id }, select: { id: true } })
+      if (exists) {
+        throw new ForbiddenException('无权删除该三销订单')
+      }
+      throw new NotFoundException('三销订单不存在')
+    }
+
+    const nextThirdPaymentAmount = Math.max(Number(order.customer.thirdPaymentAmount) - Number(order.paymentAmount), 0)
+    const nextTotalPaymentAmount = Math.max(Number(order.customer.totalPaymentAmount) - Number(order.paymentAmount), 0)
+    const nextStatus = nextThirdPaymentAmount > 0 ? CustomerStatus.COMPLETED_THIRD_SALES : CustomerStatus.THIRD_SALES_FOLLOWING
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.thirdSalesOrder.delete({ where: { id: order.id } })
+      await tx.customer.update({
+        where: { id: order.customerId },
+        data: {
+          thirdPaymentAmount: nextThirdPaymentAmount,
+          totalPaymentAmount: nextTotalPaymentAmount,
+          currentStatus: nextStatus,
+        },
+      })
+    })
+
+    return { success: true }
+  }
+
   private async ensureThirdSalesUserWithinScope(currentUser: AuthenticatedUser, thirdSalesUserId: number) {
     const where = await this.buildVisibilityWhere(currentUser)
     const targetOrder = await this.prisma.thirdSalesOrder.findFirst({

@@ -6,8 +6,7 @@ import * as XLSX from 'xlsx'
 import { authStorage } from '../../auth'
 import { hasPermission, formatPhone } from '../../utils/permissions'
 import { toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
-import { batchReviewFirstSalesOrders, fetchFirstSalesOrders } from '../../api/dashboard'
-import { deleteCustomer } from '../../api/customers'
+import { batchReviewFirstSalesOrders, deleteFirstSalesOrder, fetchFirstSalesOrders } from '../../api/first-sales'
 import type { BatchFinanceReviewPayload, CustomerItem, FirstSalesListItem } from '../../types'
 import CustomerTailPaymentDrawer from '../customers/CustomerTailPaymentDrawer.vue'
 import RefundCreateDialog from '../refund/RefundCreateDialog.vue'
@@ -67,7 +66,7 @@ const canEditFirstSales = () => hasPermission('firstSales.edit')
 const canTailFirstSales = () => hasPermission('firstSales.tail')
 const canBatchReviewFirstSales = () => hasPermission('firstSales.review.batch')
 const canExportFirstSales = () => hasPermission('firstSales.export')
-const canDeleteCustomers = () => hasPermission('customers.delete')
+const canDeleteFirstSales = () => hasPermission('firstSales.delete')
 const canCreateRefund = () => hasPermission('refund.create')
 
 const loadOrders = async () => {
@@ -201,8 +200,8 @@ const handleTransferToSecondSales = async () => {
   await loadOrders()
 }
 
-const handleDeleteCustomer = async (order: FirstSalesListItem) => {
-  await ElMessageBox.confirm(`确认删除客户“${order.name}”吗？删除后该客户的相关业绩与跟进数据也会一并删除。`, '删除客户', {
+const handleDeleteOrder = async (order: FirstSalesListItem) => {
+  await ElMessageBox.confirm(`确认删除一销业绩“${order.name}”吗？删除后仅移除当前一销业绩记录。`, '删除一销业绩', {
     type: 'warning',
     confirmButtonText: '确认删除',
     cancelButtonText: '取消',
@@ -210,9 +209,9 @@ const handleDeleteCustomer = async (order: FirstSalesListItem) => {
 
   actionLoading.value = true
   try {
-    await deleteCustomer(order.customerId)
+    await deleteFirstSalesOrder(order.id)
     markCustomerListForRefresh()
-    ElMessage.success('客户已删除')
+    ElMessage.success('一销业绩已删除')
     await loadOrders()
   } finally {
     actionLoading.value = false
@@ -223,17 +222,13 @@ const handleSelectionChange = (rows: FirstSalesListItem[]) => {
   selectedOrderIds.value = rows.map((item) => item.id)
 }
 
-const getSelectedCustomerIds = () =>
-  Array.from(new Set(selectedOrderIds.value.map((id) => orders.value.find((item) => item.id === id)?.customerId).filter((id): id is number => Boolean(id))))
-
-const handleBatchDeleteCustomers = async () => {
-  const customerIds = getSelectedCustomerIds()
-  if (!customerIds.length) {
-    ElMessage.warning('请先选择客户')
+const handleBatchDeleteOrders = async () => {
+  if (!selectedOrderIds.value.length) {
+    ElMessage.warning('请先选择业绩')
     return
   }
 
-  await ElMessageBox.confirm(`确认批量删除已选 ${customerIds.length} 个客户吗？删除后相关业绩与跟进数据也会一并删除。`, '批量删除客户', {
+  await ElMessageBox.confirm(`确认批量删除已选 ${selectedOrderIds.value.length} 条一销业绩吗？删除后仅移除所选业绩记录。`, '批量删除一销业绩', {
     type: 'warning',
     confirmButtonText: '确认删除',
     cancelButtonText: '取消',
@@ -241,9 +236,9 @@ const handleBatchDeleteCustomers = async () => {
 
   actionLoading.value = true
   try {
-    await Promise.all(customerIds.map((customerId) => deleteCustomer(customerId)))
+    await Promise.all(selectedOrderIds.value.map((orderId) => deleteFirstSalesOrder(orderId)))
     markCustomerListForRefresh()
-    ElMessage.success('批量删除成功')
+    ElMessage.success('批量删除业绩成功')
     selectedOrderIds.value = []
     orderTableRef.value?.clearSelection()
     await loadOrders()
@@ -450,7 +445,7 @@ onMounted(loadOrders)
               <el-button v-if="canExportFirstSales()" @click="exportOrders">导出Excel</el-button>
               <el-button v-if="canBatchReviewFirstSales()" type="success" :loading="reviewLoading" @click="handleBatchFinanceReview('APPROVE')">批量通过</el-button>
               <el-button v-if="canBatchReviewFirstSales()" type="warning" :loading="reviewLoading" @click="handleBatchFinanceReview('REJECT')">批量驳回</el-button>
-              <el-button v-if="canDeleteCustomers()" type="danger" :loading="actionLoading" @click="handleBatchDeleteCustomers">批量删除客户</el-button>
+              <el-button v-if="canDeleteFirstSales()" type="danger" :loading="actionLoading" @click="handleBatchDeleteOrders">批量删除业绩</el-button>
             </el-space>
             <el-table ref="orderTableRef" v-loading="loading" :data="paginatedOrders" :row-class-name="getRowClassName" @selection-change="handleSelectionChange">
               <el-table-column type="selection" width="55" />
@@ -527,7 +522,7 @@ onMounted(loadOrders)
                     <el-button v-if="canTailFirstSales() && canRecordTailPayment(scope.row)" link type="warning" @click="openTailPayment(scope.row)">补录尾款</el-button>
                     <el-button v-if="canCreateRefund()" link type="danger" :loading="refundSubmittingId === scope.row.id" @click="quickCreateRefund(scope.row)">申请退款</el-button>
                     <el-button v-if="canTransferToSecondSales(scope.row)" link type="primary" @click="handleTransferToSecondSales">转入二销</el-button>
-                    <el-button v-if="canDeleteCustomers()" link type="danger" circle class="delete-icon-button" @click="handleDeleteCustomer(scope.row)">
+                    <el-button v-if="canDeleteFirstSales()" link type="danger" circle class="delete-icon-button" @click="handleDeleteOrder(scope.row)">
                       <el-icon><Delete /></el-icon>
                     </el-button>
                   </div>

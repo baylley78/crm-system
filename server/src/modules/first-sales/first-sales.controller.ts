@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UploadedFiles, UseGuards, UseInterceptors, BadRequestException } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, UploadedFiles, UseGuards, UseInterceptors, BadRequestException, Delete } from '@nestjs/common'
 import { CurrentUser } from '../../common/auth/current-user.decorator'
 import { FileFieldsInterceptor } from '@nestjs/platform-express'
 import { diskStorage } from 'multer'
@@ -133,6 +133,12 @@ export class FirstSalesController {
       chatRecordFile: files.chatRecordFile?.[0],
       evidenceImages: files.evidenceImages || [],
     })
+  }
+
+  @Delete('orders/:id')
+  @RequirePermission('firstSales.delete')
+  removeOrder(@CurrentUser() currentUser: AuthenticatedUser, @Param('id') id: string) {
+    return this.firstSalesService.removeOrder(currentUser, Number(id))
   }
 
   @Get('orders')

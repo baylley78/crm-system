@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, UploadedFiles, UseGuards, UseInterceptors, Param, BadRequestException, Query } from '@nestjs/common'
+import { Body, Controller, Get, Patch, Post, UploadedFiles, UseGuards, UseInterceptors, Param, BadRequestException, Query, Delete } from '@nestjs/common'
 import { CurrentUser } from '../../common/auth/current-user.decorator'
 import { CurrentUserGuard } from '../../common/auth/current-user.guard'
 import { PermissionGuard } from '../../common/auth/permission.guard'
@@ -99,6 +99,12 @@ export class ThirdSalesController {
     },
   ) {
     return this.thirdSalesService.updateOrder(currentUser, Number(id), dto, files)
+  }
+
+  @Delete('orders/:id')
+  @RequirePermission('thirdSales.delete')
+  removeOrder(@CurrentUser() currentUser: AuthenticatedUser, @Param('id') id: string) {
+    return this.thirdSalesService.removeOrder(currentUser, Number(id))
   }
 
   @Post('orders/:id/finance-review')

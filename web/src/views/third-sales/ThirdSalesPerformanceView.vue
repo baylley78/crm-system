@@ -6,8 +6,7 @@ import * as XLSX from 'xlsx'
 import { authStorage } from '../../auth'
 import { toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
 import { hasPermission, formatPhone } from '../../utils/permissions'
-import { batchReviewThirdSalesOrders, fetchThirdSalesOrders } from '../../api/third-sales'
-import { deleteCustomer } from '../../api/customers'
+import { batchReviewThirdSalesOrders, deleteThirdSalesOrder, fetchThirdSalesOrders } from '../../api/third-sales'
 import type { BatchFinanceReviewPayload, ThirdSalesOrderListItem } from '../../types'
 import RefundCreateDialog from '../refund/RefundCreateDialog.vue'
 import ThirdSalesOrderDrawer from './ThirdSalesOrderDrawer.vue'
@@ -16,7 +15,7 @@ const canEditThirdSales = () => hasPermission('thirdSales.edit')
 const canBatchReviewThirdSales = () => hasPermission('thirdSales.review.batch')
 const canExportThirdSales = () => hasPermission('thirdSales.export')
 const canCreateRefund = () => hasPermission('refund.create')
-const canDeleteCustomers = () => hasPermission('customers.delete')
+const canDeleteThirdSales = () => hasPermission('thirdSales.delete')
 
 const refundSubmittingId = ref<number | null>(null)
 const refundDialogVisible = ref(false)
@@ -114,8 +113,8 @@ const quickCreateRefund = async (order: ThirdSalesOrderListItem) => {
   refundSubmittingId.value = null
 }
 
-const handleDeleteCustomer = async (order: ThirdSalesOrderListItem) => {
-  await ElMessageBox.confirm(`确认删除客户“${order.customerName}”吗？删除后该客户的相关业绩与跟进数据也会一并删除。`, '删除客户', {
+const handleDeleteOrder = async (order: ThirdSalesOrderListItem) => {
+  await ElMessageBox.confirm(`确认删除三销业绩“${order.customerName}”吗？删除后仅移除当前三销业绩记录。`, '删除三销业绩', {
     type: 'warning',
     confirmButtonText: '确认删除',
     cancelButtonText: '取消',
@@ -123,8 +122,8 @@ const handleDeleteCustomer = async (order: ThirdSalesOrderListItem) => {
 
   reviewLoading.value = true
   try {
-    await deleteCustomer(order.customerId)
-    ElMessage.success('客户已删除')
+    await deleteThirdSalesOrder(order.id)
+    ElMessage.success('三销业绩已删除')
     await loadOrders()
   } finally {
     reviewLoading.value = false
@@ -315,8 +314,8 @@ onMounted(loadOrders)
                 <template #default="scope">
                   <el-button v-if="canEditThirdSales()" link type="primary" @click="openEditDrawer(scope.row)">编辑</el-button>
                   <el-button v-if="canCreateRefund()" link type="danger" :loading="refundSubmittingId === scope.row.id" @click="quickCreateRefund(scope.row)">申请退款</el-button>
-                  <el-tooltip v-if="canDeleteCustomers()" content="删除客户" placement="top">
-                    <el-button link type="danger" :icon="Delete" @click="handleDeleteCustomer(scope.row)" />
+                  <el-tooltip v-if="canDeleteThirdSales()" content="删除三销业绩" placement="top">
+                    <el-button link type="danger" :icon="Delete" @click="handleDeleteOrder(scope.row)" />
                   </el-tooltip>
                 </template>
               </el-table-column>

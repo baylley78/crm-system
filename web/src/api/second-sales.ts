@@ -140,6 +140,11 @@ export const updateSecondSalesOrder = async (id: number, payload: SecondSalesOrd
   return data
 }
 
+export const deleteSecondSalesOrder = async (id: number) => {
+  const { data } = await request.delete<{ success: boolean }>(`/second-sales/orders/${id}`)
+  return data
+}
+
 export const reviewSecondSalesOrder = async (id: number, payload: FinanceReviewActionPayload) => {
   const { data } = await request.post<SecondSalesOrderListItem>(`/second-sales/orders/${id}/finance-review`, payload)
   return data

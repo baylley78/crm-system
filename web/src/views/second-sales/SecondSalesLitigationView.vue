@@ -6,8 +6,7 @@ import * as XLSX from 'xlsx'
 import { authStorage } from '../../auth'
 import { toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
 import { hasPermission, formatPhone } from '../../utils/permissions'
-import { batchReviewSecondSalesOrders, fetchSecondSalesOrders } from '../../api/second-sales'
-import { deleteCustomer } from '../../api/customers'
+import { batchReviewSecondSalesOrders, deleteSecondSalesOrder, fetchSecondSalesOrders } from '../../api/second-sales'
 import SecondSalesOrderDrawer from './SecondSalesOrderDrawer.vue'
 import type { BatchFinanceReviewPayload, SecondSalesOrderListItem } from '../../types'
 
@@ -31,7 +30,7 @@ const pageSizeOptions = [30, 50, 100]
 const canBatchReviewSecondSales = () => hasPermission('secondSales.review.batch')
 const canEditSecondSales = () => hasPermission('secondSales.edit')
 const canExportSecondSales = () => hasPermission('secondSales.export')
-const canDeleteCustomers = () => hasPermission('customers.delete')
+const canDeleteSecondSales = () => hasPermission('secondSales.delete')
 
 const formatDateTime = (value?: string) => value?.replace('T', ' ').slice(0, 19) || '-'
 const imageExtensionPattern = /\.(png|jpe?g|gif|bmp|webp|svg)$/i
@@ -87,8 +86,8 @@ const openEditDrawer = async (order: SecondSalesOrderListItem) => {
   await orderDrawerRef.value?.openForEdit(order)
 }
 
-const handleDeleteCustomer = async (order: SecondSalesOrderListItem) => {
-  await ElMessageBox.confirm(`确认删除客户“${order.customerName}”吗？删除后该客户的相关业绩与跟进数据也会一并删除。`, '删除客户', {
+const handleDeleteOrder = async (order: SecondSalesOrderListItem) => {
+  await ElMessageBox.confirm(`确认删除二销业绩“${order.customerName}”吗？删除后仅移除当前二销业绩记录。`, '删除二销业绩', {
     type: 'warning',
     confirmButtonText: '确认删除',
     cancelButtonText: '取消',
@@ -96,8 +95,8 @@ const handleDeleteCustomer = async (order: SecondSalesOrderListItem) => {
 
   reviewLoading.value = true
   try {
-    await deleteCustomer(order.customerId)
-    ElMessage.success('客户已删除')
+    await deleteSecondSalesOrder(order.id)
+    ElMessage.success('二销业绩已删除')
     await loadOrders()
   } finally {
     reviewLoading.value = false
@@ -287,8 +286,8 @@ onMounted(loadOrders)
           <el-table-column label="操作" min-width="160" fixed="right">
             <template #default="scope">
               <el-button v-if="canEditSecondSales()" link type="primary" @click="openEditDrawer(scope.row)">编辑</el-button>
-              <el-tooltip v-if="canDeleteCustomers()" content="删除客户" placement="top">
-                <el-button link type="danger" :icon="Delete" @click="handleDeleteCustomer(scope.row)" />
+              <el-tooltip v-if="canDeleteSecondSales()" content="删除二销业绩" placement="top">
+                <el-button link type="danger" :icon="Delete" @click="handleDeleteOrder(scope.row)" />
               </el-tooltip>
             </template>
           </el-table-column>

@@ -104,6 +104,11 @@ export const updateThirdSalesOrder = async (id: number, payload: ThirdSalesOrder
   return data
 }
 
+export const deleteThirdSalesOrder = async (id: number) => {
+  const { data } = await request.delete<{ success: boolean }>(`/third-sales/orders/${id}`)
+  return data
+}
+
 export const reviewThirdSalesOrder = async (id: number, payload: FinanceReviewActionPayload) => {
   const { data } = await request.post<ThirdSalesOrderListItem>(`/third-sales/orders/${id}/finance-review`, payload)
   return data
