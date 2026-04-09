@@ -39,6 +39,9 @@ const filters = ref({
   orderType: '',
   paymentStatus: '',
   currentStatus: '',
+  paymentAccountName: '',
+  paymentSerialNo: '',
+  tailPaymentSerialNo: '',
 })
 
 const orderTypeOptions = ['定金', '尾款', '全款']
@@ -72,7 +75,11 @@ const canCreateRefund = () => hasPermission('refund.create')
 const loadOrders = async () => {
   loading.value = true
   try {
-    orders.value = await fetchFirstSalesOrders()
+    orders.value = await fetchFirstSalesOrders({
+      paymentAccountName: filters.value.paymentAccountName || undefined,
+      paymentSerialNo: filters.value.paymentSerialNo || undefined,
+      tailPaymentSerialNo: filters.value.tailPaymentSerialNo || undefined,
+    })
   } finally {
     loading.value = false
   }
@@ -94,7 +101,11 @@ const resetFilters = () => {
   filters.value.orderType = ''
   filters.value.paymentStatus = ''
   filters.value.currentStatus = ''
+  filters.value.paymentAccountName = ''
+  filters.value.paymentSerialNo = ''
+  filters.value.tailPaymentSerialNo = ''
   currentPage.value = 1
+  loadOrders()
 }
 
 const hasActiveFilters = computed(() =>
@@ -104,18 +115,25 @@ const hasActiveFilters = computed(() =>
     filters.value.salesUserName ||
     filters.value.orderType ||
     filters.value.paymentStatus ||
-    filters.value.currentStatus,
+    filters.value.currentStatus ||
+    filters.value.paymentAccountName ||
+    filters.value.paymentSerialNo ||
+    filters.value.tailPaymentSerialNo,
   ),
 )
 
 const applyPendingTailFilter = () => {
   filters.value.paymentStatus = '部分付款'
   filters.value.currentStatus = '待补尾款'
+  currentPage.value = 1
+  loadOrders()
 }
 
 const applyPaidFilter = () => {
   filters.value.paymentStatus = '已付清'
   filters.value.currentStatus = ''
+  currentPage.value = 1
+  loadOrders()
 }
 
 const markCustomerListForRefresh = () => {
@@ -377,6 +395,13 @@ watch(pageSize, () => {
   currentPage.value = 1
 })
 
+watch(currentPage, () => {
+  const totalPages = Math.max(1, Math.ceil(prioritizedOrders.value.length / pageSize.value))
+  if (currentPage.value > totalPages) {
+    currentPage.value = totalPages
+  }
+})
+
 onMounted(loadOrders)
 </script>
 
@@ -413,6 +438,15 @@ onMounted(loadOrders)
               <el-form-item label="一销人员">
                 <el-input v-model="filters.salesUserName" placeholder="请输入一销人员" clearable />
               </el-form-item>
+              <el-form-item label="收款账户">
+                <el-input v-model="filters.paymentAccountName" placeholder="请输入收款账户" clearable />
+              </el-form-item>
+              <el-form-item label="付款单号">
+                <el-input v-model="filters.paymentSerialNo" placeholder="请输入付款单号" clearable />
+              </el-form-item>
+              <el-form-item label="尾款单号">
+                <el-input v-model="filters.tailPaymentSerialNo" placeholder="请输入尾款单号" clearable />
+              </el-form-item>
               <el-form-item label="成交类型">
                 <el-select v-model="filters.orderType" placeholder="全部" clearable style="width: 140px">
                   <el-option v-for="item in orderTypeOptions" :key="item" :label="item" :value="item" />
@@ -427,7 +461,7 @@ onMounted(loadOrders)
                 <el-input v-model="filters.currentStatus" placeholder="请输入客户状态" clearable />
               </el-form-item>
               <el-form-item>
-                <el-button type="primary" @click="loadOrders">刷新</el-button>
+                <el-button type="primary" @click="loadOrders">搜索</el-button>
                 <el-button @click="resetFilters">重置</el-button>
               </el-form-item>
             </el-form>

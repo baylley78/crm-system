@@ -76,8 +76,8 @@ const toFirstSalesTailFormData = (payload: FirstSalesTailOrderPayload) => {
   return formData
 }
 
-export const fetchFirstSalesOrders = async () => {
-  const { data } = await request.get<FirstSalesListItem[]>('/first-sales/orders')
+export const fetchFirstSalesOrders = async (params?: { paymentAccountName?: string; paymentSerialNo?: string; tailPaymentSerialNo?: string }) => {
+  const { data } = await request.get<FirstSalesListItem[]>('/first-sales/orders', { params })
   return data
 }
 

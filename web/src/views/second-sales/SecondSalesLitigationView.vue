@@ -23,6 +23,10 @@ const previewTitle = ref('附件预览')
 const previewImageUrl = ref('')
 const previewFileUrl = ref('')
 const previewFailed = ref(false)
+const searchForm = ref({
+  paymentAccountName: '',
+  paymentSerialNo: '',
+})
 const currentPage = ref(1)
 const pageSize = ref(30)
 const pageSizeOptions = [30, 50, 100]
@@ -69,12 +73,29 @@ const openPreview = (url?: string, title = '附件预览') => {
 const loadOrders = async () => {
   loading.value = true
   try {
-    const result = await fetchSecondSalesOrders({ page: currentPage.value, pageSize: pageSize.value })
+    const result = await fetchSecondSalesOrders({
+      page: currentPage.value,
+      pageSize: pageSize.value,
+      paymentAccountName: searchForm.value.paymentAccountName || undefined,
+      paymentSerialNo: searchForm.value.paymentSerialNo || undefined,
+    })
     orders.value = result.items
     total.value = result.total
   } finally {
     loading.value = false
   }
+}
+
+const handleSearch = () => {
+  currentPage.value = 1
+  loadOrders()
+}
+
+const resetSearch = () => {
+  searchForm.value.paymentAccountName = ''
+  searchForm.value.paymentSerialNo = ''
+  currentPage.value = 1
+  loadOrders()
 }
 
 const handleSelectionChange = (rows: SecondSalesOrderListItem[]) => {
@@ -193,6 +214,21 @@ onMounted(loadOrders)
     <el-card>
       <template #header>起诉业绩（二销）</template>
       <div class="page-stack-sm">
+        <el-card shadow="never">
+          <template #header>搜索条件</template>
+          <el-form inline>
+            <el-form-item label="收款账户">
+              <el-input v-model="searchForm.paymentAccountName" placeholder="请输入收款账户" clearable />
+            </el-form-item>
+            <el-form-item label="付款单号">
+              <el-input v-model="searchForm.paymentSerialNo" placeholder="请输入付款单号" clearable />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="handleSearch">搜索</el-button>
+              <el-button @click="resetSearch">重置</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
         <el-alert title="这里固定展示已录入过的二销业绩订单，客户后续转入法务、调解或三销后，历史订单仍会保留在列表中。" type="info" :closable="false" show-icon />
         <el-space wrap>
           <el-button v-if="canExportSecondSales()" @click="exportOrders">导出Excel</el-button>

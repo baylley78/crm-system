@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UploadedFiles, UseGuards, UseInterceptors, BadRequestException, Delete } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, UploadedFiles, UseGuards, UseInterceptors, BadRequestException, Delete, Query } from '@nestjs/common'
 import { CurrentUser } from '../../common/auth/current-user.decorator'
 import { FileFieldsInterceptor } from '@nestjs/platform-express'
 import { diskStorage } from 'multer'
@@ -12,6 +12,7 @@ import { CreateFirstSalesOrderDto } from './dto/create-first-sales-order.dto'
 import { CreateFirstSalesTailOrderDto } from './dto/create-first-sales-tail-order.dto'
 import { FinanceReviewActionDto } from './dto/finance-review-action.dto'
 import { BatchFinanceReviewDto } from './dto/batch-finance-review.dto'
+import { QueryOrderListDto } from '../../common/dto/query-order-list.dto'
 
 const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const DOCUMENT_MIME_TYPES = ['application/pdf']
@@ -142,8 +143,8 @@ export class FirstSalesController {
   }
 
   @Get('orders')
-  findOrders(@CurrentUser() currentUser: AuthenticatedUser) {
-    return this.firstSalesService.findOrders(currentUser)
+  findOrders(@CurrentUser() currentUser: AuthenticatedUser, @Query() query: QueryOrderListDto) {
+    return this.firstSalesService.findOrders(currentUser, query)
   }
 
   @Get('users')

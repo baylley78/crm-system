@@ -15,7 +15,7 @@ export const fetchThirdSalesUsers = async () => {
   return data
 }
 
-export const fetchThirdSalesOrders = async (params?: { page?: number; pageSize?: number }) => {
+export const fetchThirdSalesOrders = async (params?: { page?: number; pageSize?: number; paymentAccountName?: string; paymentSerialNo?: string }) => {
   const { data } = await request.get<PaginatedResponse<ThirdSalesOrderListItem>>('/third-sales/orders', { params })
   return data
 }

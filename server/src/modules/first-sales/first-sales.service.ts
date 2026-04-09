@@ -10,6 +10,7 @@ import { CreateFirstSalesTailOrderDto } from './dto/create-first-sales-tail-orde
 import { FinanceReviewActionDto, FinanceReviewActionTypeDto } from './dto/finance-review-action.dto'
 import { BatchFinanceReviewDto } from './dto/batch-finance-review.dto'
 import { DingTalkReportService } from '../dingtalk-report/dingtalk-report.service'
+import { QueryOrderListDto } from '../../common/dto/query-order-list.dto'
 
 const FIRST_SALES_ROLE_CODES = ['SUPER_ADMIN', 'FIRST_SALES_MANAGER', 'FIRST_SALES_SUPERVISOR', 'FIRST_SALES']
 const FIRST_SALES_TIME_EDIT_PERMISSION = 'firstSales.time.edit'
@@ -440,9 +441,14 @@ export class FirstSalesService implements OnModuleInit {
     return { success: true }
   }
 
-  async findOrders(currentUser: AuthenticatedUser) {
+  async findOrders(currentUser: AuthenticatedUser, query?: QueryOrderListDto) {
+    const where = {
+      ...(await this.buildVisibilityWhere(currentUser)),
+      ...this.buildQueryWhere(query),
+    }
+
     const orders = await this.prisma.firstSalesOrder.findMany({
-      where: await this.buildVisibilityWhere(currentUser),
+      where,
       include: {
         customer: {
           include: {
@@ -687,6 +693,46 @@ export class FirstSalesService implements OnModuleInit {
         }
       default:
         return { id: -1 }
+    }
+  }
+
+  private buildQueryWhere(query?: QueryOrderListDto): Prisma.FirstSalesOrderWhereInput {
+    const paymentAccountName = query?.paymentAccountName?.trim()
+    const paymentSerialNo = query?.paymentSerialNo?.trim()
+    const tailPaymentSerialNo = query?.tailPaymentSerialNo?.trim()
+
+    return {
+      ...(paymentAccountName
+        ? {
+            paymentAccountName: {
+              contains: paymentAccountName,
+              mode: 'insensitive',
+            },
+          }
+        : {}),
+      ...(paymentSerialNo
+        ? {
+            paymentSerialNo: {
+              contains: paymentSerialNo,
+              mode: 'insensitive',
+            },
+          }
+        : {}),
+      ...(tailPaymentSerialNo
+        ? {
+            AND: [
+              {
+                orderType: FirstOrderTypeDto.TAIL,
+              },
+              {
+                paymentSerialNo: {
+                  contains: tailPaymentSerialNo,
+                  mode: 'insensitive',
+                },
+              },
+            ],
+          }
+        : {}),
     }
   }
 

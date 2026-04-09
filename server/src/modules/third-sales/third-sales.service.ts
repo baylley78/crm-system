@@ -113,7 +113,10 @@ export class ThirdSalesService {
     const page = query?.page ?? 1
     const pageSize = query?.pageSize ?? 30
     const skip = (page - 1) * pageSize
-    const where = await this.buildVisibilityWhere(currentUser)
+    const where = {
+      ...(await this.buildVisibilityWhere(currentUser)),
+      ...this.buildQueryWhere(query),
+    }
 
     const [orders, total] = await this.prisma.$transaction([
       this.prisma.thirdSalesOrder.findMany({
@@ -661,6 +664,30 @@ export class ThirdSalesService {
         }
       default:
         return { id: -1 }
+    }
+  }
+
+  private buildQueryWhere(query?: QueryOrderListDto): Prisma.ThirdSalesOrderWhereInput {
+    const paymentAccountName = query?.paymentAccountName?.trim()
+    const paymentSerialNo = query?.paymentSerialNo?.trim()
+
+    return {
+      ...(paymentAccountName
+        ? {
+            paymentAccountName: {
+              contains: paymentAccountName,
+              mode: 'insensitive',
+            },
+          }
+        : {}),
+      ...(paymentSerialNo
+        ? {
+            paymentSerialNo: {
+              contains: paymentSerialNo,
+              mode: 'insensitive',
+            },
+          }
+        : {}),
     }
   }
 

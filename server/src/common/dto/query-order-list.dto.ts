@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer'
-import { IsInt, IsOptional, Max, Min } from 'class-validator'
+import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator'
 
 export class QueryOrderListDto {
   @IsOptional()
@@ -14,4 +14,19 @@ export class QueryOrderListDto {
   @Min(1)
   @Max(100)
   pageSize?: number
+
+  @IsOptional()
+  @Type(() => String)
+  @IsString()
+  paymentAccountName?: string
+
+  @IsOptional()
+  @Type(() => String)
+  @IsString()
+  paymentSerialNo?: string
+
+  @IsOptional()
+  @Type(() => String)
+  @IsString()
+  tailPaymentSerialNo?: string
 }

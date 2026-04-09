@@ -22,7 +22,7 @@ export const fetchSecondSalesUsers = async () => {
   return data
 }
 
-export const fetchSecondSalesOrders = async (params?: { page?: number; pageSize?: number }) => {
+export const fetchSecondSalesOrders = async (params?: { page?: number; pageSize?: number; paymentAccountName?: string; paymentSerialNo?: string }) => {
   const { data } = await request.get<PaginatedResponse<SecondSalesOrderListItem>>('/second-sales/orders', { params })
   return data
 }

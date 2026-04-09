@@ -54,7 +54,10 @@ export class SecondSalesService {
     const page = query?.page ?? 1
     const pageSize = query?.pageSize ?? 30
     const skip = (page - 1) * pageSize
-    const where = await this.buildVisibilityWhere(currentUser)
+    const where = {
+      ...(await this.buildVisibilityWhere(currentUser)),
+      ...this.buildQueryWhere(query),
+    }
 
     const [orders, total] = await this.prisma.$transaction([
       this.prisma.secondSalesOrder.findMany({
@@ -484,6 +487,30 @@ export class SecondSalesService {
     })
 
     return { success: true }
+  }
+
+  private buildQueryWhere(query?: QueryOrderListDto): Prisma.SecondSalesOrderWhereInput {
+    const paymentAccountName = query?.paymentAccountName?.trim()
+    const paymentSerialNo = query?.paymentSerialNo?.trim()
+
+    return {
+      ...(paymentAccountName
+        ? {
+            paymentAccountName: {
+              contains: paymentAccountName,
+              mode: 'insensitive',
+            },
+          }
+        : {}),
+      ...(paymentSerialNo
+        ? {
+            paymentSerialNo: {
+              contains: paymentSerialNo,
+              mode: 'insensitive',
+            },
+          }
+        : {}),
+    }
   }
 
   private resolveOrderDate(currentUser: AuthenticatedUser, input?: string, fallback?: Date | null) {
