@@ -72,6 +72,8 @@ const form = reactive<FirstSalesForm>(initialForm())
 
 const isEditMode = () => Boolean(editingOrder.value)
 
+const shouldRequireChatRecord = () => form.orderType === 'TAIL' || form.orderType === 'FULL'
+
 const toOrderTypeCode = (value?: string): FirstSalesForm['orderType'] => {
   if (value === '尾款') {
     return 'TAIL'
@@ -329,8 +331,8 @@ const validateForm = () => {
     return false
   }
 
-  if (!form.chatRecordFile && !isEditMode()) {
-    ElMessage.warning('请上传客户聊天记录')
+  if (shouldRequireChatRecord() && !form.chatRecordFile && !isEditMode()) {
+    ElMessage.warning('尾款和全款必须上传客户聊天记录')
     return false
   }
 
@@ -504,12 +506,14 @@ defineExpose({
               </el-upload>
             </div>
           </el-form-item>
-          <el-form-item label="聊天记录" class="full-width">
+          <el-form-item v-if="shouldRequireChatRecord()" label="聊天记录" class="full-width">
             <div class="page-stack-sm full-width upload-panel">
               <div class="paste-upload-box" tabindex="0" @paste="handleChatRecordPaste">
                 复制聊天截图后，在这里按 Ctrl+V 直接粘贴
               </div>
-              <div v-if="isEditMode()" class="upload-tip">编辑时如不重新上传，将保留当前聊天记录文件</div>
+              <div class="upload-tip">
+                尾款和全款必须上传聊天记录；编辑时如不重新上传，将保留当前文件
+              </div>
               <img v-if="chatRecordPreviewUrl" :src="chatRecordPreviewUrl" alt="聊天截图预览" class="paste-image-preview" />
               <el-upload
                 :auto-upload="false"

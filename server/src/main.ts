@@ -1,4 +1,4 @@
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import helmet from 'helmet';
 import { existsSync, mkdirSync } from 'fs';
@@ -17,6 +17,7 @@ const getAllowedOrigins = () => {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const logger = new Logger('HTTP');
   const uploadDir = join(process.cwd(), 'uploads');
 
   if (!existsSync(uploadDir)) {
@@ -39,6 +40,15 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
+
+  app.use((req: any, res: any, next: any) => {
+    res.on('finish', () => {
+      if (res.statusCode >= 500) {
+        logger.error(`${req.method} ${req.originalUrl} -> ${res.statusCode}`);
+      }
+    });
+    next();
+  });
 
   await app.listen(process.env.PORT ?? 3000);
 }

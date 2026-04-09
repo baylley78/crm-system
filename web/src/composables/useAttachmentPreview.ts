@@ -3,7 +3,10 @@ import { authStorage } from '../auth'
 
 const resolveFileBaseURL = () => {
   const configured = import.meta.env.VITE_FILE_BASE_URL?.trim() || import.meta.env.VITE_API_BASE_URL?.trim()
-  return configured ? configured.replace(/\/$/, '') : window.location.origin
+  if (configured) {
+    return configured.replace(/\/$/, '')
+  }
+  return 'http://127.0.0.1:3000'
 }
 
 const fileBaseURL = resolveFileBaseURL()

@@ -6,16 +6,17 @@ import { getFileName, isImageFile, toAbsoluteFileUrl } from '../../composables/u
 import { hasPermission, formatPhone } from '../../utils/permissions'
 import { fetchLegalCases, fetchLegalUsers, saveLegalCase, transferLegalCaseToThirdSales } from '../../api/legal'
 import { deleteCustomer } from '../../api/customers'
-import type { LegalCaseItem, LegalCaseStage, SalesUserOption, SaveLegalCasePayload } from '../../types'
+import type { CreateRefundCasePayload, LegalCaseItem, LegalCaseStage, SalesUserOption, SaveLegalCasePayload } from '../../types'
+import RefundCreateDialog from '../refund/RefundCreateDialog.vue'
 
 const canEditLegal = () => hasPermission('legal.edit')
 const canTransferLegal = () => hasPermission('legal.transfer')
-const canViewLegalUsers = () => hasPermission('legal.users.view')
 const canDeleteCustomers = () => hasPermission('customers.delete')
 const canAssignLegal = () => hasPermission('legal.assign')
 const canReviewFiling = () => hasPermission('legal.filing.review')
 const canHandlePreTrial = () => hasPermission('legal.pretrial.handle')
 const canCloseLegal = () => hasPermission('legal.close')
+const canCreateRefund = () => hasPermission('refund.create')
 const canOperateLegal = () => canEditLegal() || canAssignLegal() || canReviewFiling() || canHandlePreTrial() || canCloseLegal()
 const canOnlyEditLegalBaseFields = () => canEditLegal() && !canAssignLegal() && !canReviewFiling() && !canHandlePreTrial() && !canCloseLegal()
 
@@ -29,10 +30,13 @@ const stageOptions: Array<{ label: string; value: LegalCaseStage }> = [
 const loading = ref(false)
 const saving = ref(false)
 const transferringId = ref<number | null>(null)
+const refundingId = ref<number | null>(null)
 const cases = ref<LegalCaseItem[]>([])
 const total = ref(0)
 const users = ref<SalesUserOption[]>([])
 const dialogVisible = ref(false)
+const refundDialogVisible = ref(false)
+const refundDraft = ref<CreateRefundCasePayload | null>(null)
 const form = reactive<SaveLegalCasePayload>({
   customerId: 0,
   progressStatus: '',
@@ -50,8 +54,8 @@ const form = reactive<SaveLegalCasePayload>({
   closeResult: '',
 })
 const currentPage = ref(1)
-const pageSize = ref(10)
-const pageSizeOptions = [10, 20, 50, 100]
+const pageSize = ref(30)
+const pageSizeOptions = [30, 50, 100]
 const selectedStage = ref<LegalCaseStage | ''>('')
 const activeCase = ref<LegalCaseItem | null>(null)
 
@@ -69,10 +73,7 @@ const formatStage = (stage?: LegalCaseStage) => (stage ? stageLabelMap[stage] : 
 const loadData = async () => {
   loading.value = true
   try {
-    const requests: Array<Promise<unknown>> = [fetchLegalCases({ page: currentPage.value, pageSize: pageSize.value, stage: selectedStage.value || undefined })]
-    if (canViewLegalUsers()) {
-      requests.push(fetchLegalUsers())
-    }
+    const requests: Array<Promise<unknown>> = [fetchLegalCases({ page: currentPage.value, pageSize: pageSize.value, stage: selectedStage.value || undefined }), fetchLegalUsers()]
     const [caseResult, userList] = await Promise.all(requests)
     const casePage = caseResult as { items: LegalCaseItem[]; total: number }
     cases.value = casePage.items
@@ -120,6 +121,23 @@ const submit = async () => {
     await loadData()
   } finally {
     saving.value = false
+  }
+}
+
+const quickCreateRefund = async (item: LegalCaseItem) => {
+  refundingId.value = item.customerId
+  try {
+    refundDraft.value = {
+      customerId: item.customerId,
+      customerName: item.name,
+      phone: item.phone,
+      sourceStage: 'LEGAL',
+      firstSalesUserId: item.firstSalesUserId,
+      reason: `客户在法务阶段申请退款，当前进度：${item.progressStatus || '处理中'}`,
+    }
+    refundDialogVisible.value = true
+  } finally {
+    refundingId.value = null
   }
 }
 
@@ -225,6 +243,7 @@ const openAttachment = (url?: string) => {
                 <el-tooltip v-if="canOperateLegal()" :content="legalActionTip" placement="top">
                   <el-button link type="primary" @click="openDialog(scope.row)">{{ legalActionLabel }}</el-button>
                 </el-tooltip>
+                <el-button v-if="canCreateRefund()" link type="danger" :loading="refundingId === scope.row.customerId" @click="quickCreateRefund(scope.row)">申请退款</el-button>
                 <el-tooltip v-if="canShowTransfer(scope.row)" content="法务流程已完成，可转入三销接待" placement="top">
                   <el-button link type="success" :loading="transferringId === scope.row.customerId" @click="transferToThirdSales(scope.row)">移交三销</el-button>
                 </el-tooltip>
@@ -365,6 +384,8 @@ const openAttachment = (url?: string) => {
         <el-button type="primary" :loading="saving" @click="submit">保存</el-button>
       </template>
     </el-dialog>
+
+    <RefundCreateDialog v-model:visible="refundDialogVisible" :draft="refundDraft" @success="loadData" />
   </div>
 </template>
 

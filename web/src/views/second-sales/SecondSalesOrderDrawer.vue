@@ -6,15 +6,12 @@ import { Document } from '@element-plus/icons-vue'
 import { authStorage } from '../../auth'
 import { formatPhone, hasPermission } from '../../utils/permissions'
 import { createSecondSalesOrder, fetchSecondSalesUsers, updateSecondSalesOrder } from '../../api/second-sales'
-import { fetchCustomerDetail } from '../../api/customers'
+import { fetchPerformanceFormCustomerDetail } from '../../api/customers'
 import { fetchPaymentAccountOptions } from '../../api/payment-accounts'
 import { fetchCourtConfig } from '../../api/court-config'
 import { getFileName, isImageFile, toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
 import type { CustomerDetail, PaymentAccountOption, SalesUserOption, SecondSalesAssignmentItem, SecondSalesOrderListItem, SecondSalesOrderPayload } from '../../types'
 
-const canViewSecondSalesUsers = () => hasPermission('secondSales.users.view')
-const canReadPerformanceFormCustomer = () => hasPermission('customers.read.performanceForm')
-const canViewCourtConfig = () => hasPermission('system.courtConfig.view')
 const canEditOrderTime = () => hasPermission('secondSales.time.edit')
 
 const visible = defineModel<boolean>('visible', { required: true })
@@ -166,8 +163,8 @@ const fillFormForEdit = (order: SecondSalesOrderListItem) => {
 const loadUsers = async () => {
   const [paymentAccountsResult, courtConfigResult, userListResult] = await Promise.allSettled([
     fetchPaymentAccountOptions(),
-    canViewCourtConfig() ? fetchCourtConfig() : Promise.resolve({ hearingCost: 0 }),
-    canViewSecondSalesUsers() ? fetchSecondSalesUsers() : Promise.resolve([] as SalesUserOption[]),
+    fetchCourtConfig().catch(() => ({ hearingCost: 0 })),
+    fetchSecondSalesUsers(),
   ])
 
   paymentAccounts.value = paymentAccountsResult.status === 'fulfilled' ? paymentAccountsResult.value : []
@@ -181,13 +178,13 @@ const loadUsers = async () => {
   }
 
   if (paymentAccountsResult.status === 'rejected') {
-    ElMessage.error('收款账户加载失败，请刷新后重试')
+    ElMessage.error(paymentAccountsResult.reason?.response?.data?.message || paymentAccountsResult.reason?.message || '收款账户加载失败，请刷新后重试')
   } else if (!paymentAccounts.value.length) {
     ElMessage.warning('暂无可用收款账户，请联系管理员先启用收款账户')
   }
 
   if (userListResult.status === 'rejected') {
-    ElMessage.error('二销人员加载失败，请刷新后重试')
+    ElMessage.error(userListResult.reason?.response?.data?.message || userListResult.reason?.message || '二销人员加载失败，请刷新后重试')
   }
 
   if (courtConfigResult.status === 'rejected') {
@@ -202,17 +199,15 @@ const openForCustomer = async (customer: SecondSalesAssignmentItem) => {
   visible.value = true
   resetForm()
 
-  if (!paymentAccounts.value.length || (canViewSecondSalesUsers() && !users.value.length)) {
+  if (!paymentAccounts.value.length || !users.value.length) {
     await loadUsers()
   }
 
   try {
-    if (canReadPerformanceFormCustomer()) {
-      currentCustomerDetail.value = await fetchCustomerDetail(`${customer.id}?scene=performance-form` as unknown as number)
-      return
-    }
-  } catch {
-    ElMessage.warning('客户详情暂无权限查看，已使用列表信息继续录单')
+    currentCustomerDetail.value = await fetchPerformanceFormCustomerDetail(customer.id)
+    return
+  } catch (error: any) {
+    ElMessage.warning(error?.response?.data?.message || error?.message || '客户详情读取失败，已使用列表信息继续录单')
   }
 
   currentCustomerDetail.value = null

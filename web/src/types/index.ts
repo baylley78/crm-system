@@ -48,6 +48,7 @@ export interface CustomerItem {
   intentionLevel?: string
   currentStatus: CustomerStatus
   firstSalesUserName?: string
+  firstSalesDepartmentName?: string
   firstSalesTeamName?: string
   secondSalesUserName?: string
   legalUserName?: string
@@ -466,7 +467,9 @@ export interface FirstSalesListItem {
   currentStatus: string
   salesUserName: string
   salesUserId?: number
+  firstSalesDepartmentId?: number
   firstSalesTeamName?: string
+  firstSalesDepartmentName?: string
   financeReviewStatus: 'PENDING' | 'APPROVED' | 'REJECTED'
   financeReviewStatusLabel: string
   financeReviewerId?: number
@@ -687,6 +690,8 @@ export interface RefundCaseItem {
   sourceStageLabel: string
   relatedOrderId?: number
   relatedOrderStage?: RefundRelatedOrderStage
+  firstSalesUserId?: number
+  firstSalesUserName?: string
   firstSalesDepartmentId?: number
   firstSalesDepartmentName?: string
   firstSalesTeamName?: string
@@ -708,6 +713,19 @@ export interface RefundCaseItem {
   createdAt: string
   updatedAt: string
   logs: RefundCaseLogItem[]
+  relatedComplaint?: {
+    id: number
+    complaintSubject: string
+    handlingStatus: JudicialComplaintHandlingStatus
+    handlingStatusLabel: string
+    shouldHandle: boolean
+    qualityChecked: boolean
+    qualityCheckedAt?: string
+    complaintTime: string
+    complaintReason: string
+    qualityRecordId?: number
+  }
+  relatedQualityRecord?: QualityRecordItem
   customer?: RefundCaseCustomerInfo
 }
 
@@ -718,6 +736,8 @@ export interface CreateRefundCasePayload {
   sourceStage: RefundSourceStage
   relatedOrderId?: number
   relatedOrderStage?: RefundRelatedOrderStage
+  firstSalesUserId?: number
+  firstSalesUserName?: string
   firstSalesDepartmentId?: number
   reason: string
   expectedRefundAmount?: number
@@ -781,6 +801,10 @@ export interface JudicialComplaintCaseItem {
   handlingStatus: JudicialComplaintHandlingStatus
   handlingStatusLabel: string
   handledAt?: string
+  qualityChecked: boolean
+  qualityCheckedAt?: string
+  qualityRecordId?: number
+  qualityRecord?: QualityRecordItem
   submittedById: number
   submittedByName?: string
   handledById?: number
@@ -927,7 +951,10 @@ export interface ThirdSalesOrderListItem {
   customerNo: string
   customerName: string
   phone: string
+  firstSalesUserId?: number
+  firstSalesUserName?: string
   firstSalesTeamName?: string
+  firstSalesDepartmentName?: string
   thirdSalesUserName: string
   thirdSalesUserId?: number
   sourceStage?: ThirdSalesSourceStage
@@ -1345,6 +1372,12 @@ export interface QualityRecordItem {
   recordDate: string
   responsibleId: number
   responsibleName: string
+  customerId?: number
+  customerName?: string
+  customerPhone?: string
+  judicialComplaintCaseId?: number
+  judicialComplaintQualityCheckedAt?: string
+  judicialComplaintHandledByName?: string
   penaltyAmount: number
   matter: string
   screenshotUrl?: string
@@ -1354,6 +1387,8 @@ export interface QualityRecordItem {
 export interface QualityCreatePayload {
   recordDate: string
   responsibleId: number
+  customerId?: number
+  judicialComplaintCaseId?: number
   matter: string
   penaltyAmount: number
   screenshot?: File | null

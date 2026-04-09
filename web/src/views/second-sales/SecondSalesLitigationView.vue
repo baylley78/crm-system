@@ -25,8 +25,8 @@ const previewImageUrl = ref('')
 const previewFileUrl = ref('')
 const previewFailed = ref(false)
 const currentPage = ref(1)
-const pageSize = ref(10)
-const pageSizeOptions = [10, 20, 50, 100]
+const pageSize = ref(30)
+const pageSizeOptions = [30, 50, 100]
 
 const canBatchReviewSecondSales = () => hasPermission('secondSales.review.batch')
 const canEditSecondSales = () => hasPermission('secondSales.edit')

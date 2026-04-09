@@ -111,7 +111,7 @@ export class ThirdSalesService {
 
   async findOrders(currentUser: AuthenticatedUser, query?: QueryOrderListDto) {
     const page = query?.page ?? 1
-    const pageSize = query?.pageSize ?? 10
+    const pageSize = query?.pageSize ?? 30
     const skip = (page - 1) * pageSize
     const where = await this.buildVisibilityWhere(currentUser)
 
@@ -152,7 +152,7 @@ export class ThirdSalesService {
 
   async findReceptions(currentUser: AuthenticatedUser, query?: QueryOrderListDto) {
     const page = query?.page ?? 1
-    const pageSize = query?.pageSize ?? 10
+    const pageSize = query?.pageSize ?? 30
     const skip = (page - 1) * pageSize
     const where = {
       ...(await this.customersService.buildCustomerVisibilityWhere(currentUser)),

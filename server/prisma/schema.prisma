@@ -342,6 +342,7 @@ model FirstSalesOrder {
   paymentAccountName   String?
   paymentSerialNo      String?                @unique
   paymentScreenshotUrl String?
+  chatRecordUrl        String?
   evidenceImageUrls    String?
   paymentStatus        String?
   financeReviewStatus  FinanceReviewStatus @default(PENDING)
@@ -490,6 +491,8 @@ model RefundCase {
   sourceStage          RefundSourceStage
   relatedOrderId       Int?
   relatedOrderStage    ContractSalesStage?
+  firstSalesUserId     Int?
+  firstSalesUserName   String?
   firstSalesDepartmentId   Int?
   firstSalesDepartmentName String?
   firstSalesTeamName       String?
@@ -514,6 +517,7 @@ model RefundCase {
   updatedAt            DateTime          @updatedAt
 
   @@index([customerId])
+  @@index([firstSalesUserId])
   @@index([firstSalesDepartmentId])
   @@index([firstSalesTeamName])
   @@index([status])
@@ -536,6 +540,7 @@ model JudicialComplaintCase {
   customerId                Int?
   submittedById             Int
   handledById               Int?
+  qualityRecordId           Int?
   complaintSubject          String
   teamName                  String?
   departmentName            String?
@@ -560,11 +565,17 @@ model JudicialComplaintCase {
   shouldHandle              Boolean                        @default(true)
   handlingStatus            JudicialComplaintHandlingStatus @default(PENDING)
   handledAt                 DateTime?
+  qualityChecked            Boolean                         @default(false)
+  qualityCheckedAt          DateTime?
   customer                  Customer?                       @relation("ComplaintCustomer", fields: [customerId], references: [id])
   submittedBy               User                            @relation("ComplaintSubmittedBy", fields: [submittedById], references: [id])
   handledBy                 User?                           @relation("ComplaintHandledBy", fields: [handledById], references: [id])
+  qualityRecord             QualityRecord?                  @relation(fields: [qualityRecordId], references: [id])
   createdAt                 DateTime                        @default(now())
   updatedAt                 DateTime                        @updatedAt
+
+  @@index([customerId])
+  @@index([qualityRecordId])
 }
 
 model ThirdSalesOrder {
@@ -692,8 +703,11 @@ model QualityRecord {
   screenshotUrl String?
   responsible   User      @relation(fields: [responsibleId], references: [id])
   customer      Customer? @relation(fields: [customerId], references: [id])
+  complaintCases JudicialComplaintCase[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  @@index([customerId])
 }
 
 model ContractArchive {

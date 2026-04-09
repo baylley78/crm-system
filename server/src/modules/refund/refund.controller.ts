@@ -30,13 +30,11 @@ export class RefundController {
   }
 
   @Get('users')
-  @RequirePermission('refund.users.view')
   findUsers() {
     return this.refundService.findUsers()
   }
 
   @Get('first-sales-departments')
-  @RequirePermission('refund.department.view')
   findFirstSalesDepartments(@CurrentUser() currentUser: AuthenticatedUser) {
     return this.refundService.findFirstSalesDepartments(currentUser)
   }

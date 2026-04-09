@@ -8,7 +8,7 @@ import { SaveMediationCaseDto } from './dto/save-mediation-case.dto'
 
 const MEDIATION_ROLE_CODES = ['SUPER_ADMIN', 'AFTER_SALES_MANAGER', 'AFTER_SALES', 'MEDIATION_SPECIALIST', 'LEGAL_MANAGER', 'LEGAL', 'SECOND_SALES_MANAGER', 'SECOND_SALES_SUPERVISOR', 'SECOND_SALES']
 const DEFAULT_PAGE = 1
-const DEFAULT_PAGE_SIZE = 10
+const DEFAULT_PAGE_SIZE = 30
 const MEDIATION_TIME_EDIT_PERMISSION = 'mediation.time.edit'
 
 @Injectable()

@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { fetchJudicialComplaintCaseDetail, fetchJudicialComplaintCases } from '../../api/judicial-complaints'
 import { hasPermission, formatPhone } from '../../utils/permissions'
+import { toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
 import type { JudicialComplaintCaseFilters, JudicialComplaintCaseItem } from '../../types'
 import JudicialComplaintCreateDialog from './JudicialComplaintCreateDialog.vue'
 
 const canCreateComplaint = () => hasPermission('judicialComplaint.create')
+const canCreateQuality = () => hasPermission('quality.create')
 
+const router = useRouter()
 const loading = ref(false)
 const saving = ref(false)
 const creatingDialogVisible = ref(false)
@@ -14,8 +18,8 @@ const cases = ref<JudicialComplaintCaseItem[]>([])
 const activeCase = ref<JudicialComplaintCaseItem | null>(null)
 const total = ref(0)
 const currentPage = ref(1)
-const pageSize = ref(10)
-const pageSizeOptions = [10, 20, 50, 100]
+const pageSize = ref(30)
+const pageSizeOptions = [30, 50, 100]
 
 const filters = reactive<JudicialComplaintCaseFilters>({
   handlingStatus: '',
@@ -36,6 +40,7 @@ const handlingTagType = (status?: string) => {
   if (status === 'IGNORED') return 'info'
   return 'danger'
 }
+const qualityTagType = (checked?: boolean) => (checked ? 'success' : 'info')
 
 const loadData = async () => {
   loading.value = true
@@ -61,6 +66,28 @@ const selectCase = async (item: JudicialComplaintCaseItem | null) => {
     return
   }
   activeCase.value = await fetchJudicialComplaintCaseDetail(item.id)
+}
+
+const goToQuality = async (item: JudicialComplaintCaseItem) => {
+  await router.push({
+    path: '/quality',
+    query: {
+      judicialComplaintCaseId: String(item.id),
+      customerId: item.customerId ? String(item.customerId) : undefined,
+      customerName: item.customerName,
+      phone: item.phone,
+      complaintSubject: item.complaintSubject,
+      complaintReason: item.complaintReason,
+    },
+  })
+}
+
+const openQualityScreenshot = (url?: string) => {
+  const absoluteUrl = toAbsoluteFileUrl(url)
+  if (!absoluteUrl) {
+    return
+  }
+  window.open(absoluteUrl, '_blank', 'noopener')
 }
 
 const handleCreateSuccess = async () => {
@@ -123,6 +150,11 @@ onMounted(loadData)
                 <el-tag :type="handlingTagType(scope.row.handlingStatus)">{{ scope.row.handlingStatusLabel }}</el-tag>
               </template>
             </el-table-column>
+            <el-table-column label="质检状态" min-width="120">
+              <template #default="scope">
+                <el-tag :type="qualityTagType(scope.row.qualityChecked)">{{ scope.row.qualityChecked ? '已检查' : '未检查' }}</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column label="提交人" prop="submittedByName" min-width="120" />
           </el-table>
 
@@ -142,6 +174,7 @@ onMounted(loadData)
           <template #header>
             <div class="card-header-row">
               <span>投诉详情</span>
+              <el-button v-if="activeCase && !activeCase.qualityChecked && canCreateQuality()" type="primary" link @click="goToQuality(activeCase)">发起质检</el-button>
             </div>
           </template>
 
@@ -152,7 +185,10 @@ onMounted(loadData)
                   <div class="status-title">是否处理投诉</div>
                   <div class="status-value">{{ activeCase.shouldHandle ? '需要处理' : '无需处理' }}</div>
                 </div>
-                <el-tag size="large" :type="handlingTagType(activeCase.handlingStatus)">{{ activeCase.handlingStatusLabel }}</el-tag>
+                <el-space direction="vertical" alignment="end">
+                  <el-tag size="large" :type="handlingTagType(activeCase.handlingStatus)">{{ activeCase.handlingStatusLabel }}</el-tag>
+                  <el-tag size="large" :type="qualityTagType(activeCase.qualityChecked)">{{ activeCase.qualityChecked ? '已检查' : '未检查' }}</el-tag>
+                </el-space>
               </div>
 
               <el-descriptions :column="2" border>
@@ -179,6 +215,26 @@ onMounted(loadData)
                 <el-descriptions-item label="客户投诉原因" :span="2">{{ activeCase.complaintReason }}</el-descriptions-item>
                 <el-descriptions-item label="总结" :span="2">{{ activeCase.summary || '-' }}</el-descriptions-item>
               </el-descriptions>
+
+              <el-card shadow="never">
+                <template #header>质检记录</template>
+                <template v-if="activeCase.qualityRecord">
+                  <el-descriptions :column="2" border>
+                    <el-descriptions-item label="质检状态">已检查</el-descriptions-item>
+                    <el-descriptions-item label="检查时间">{{ formatDateTime(activeCase.qualityCheckedAt) }}</el-descriptions-item>
+                    <el-descriptions-item label="责任人">{{ activeCase.qualityRecord.responsibleName || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="处罚金额">{{ formatCurrency(activeCase.qualityRecord.penaltyAmount) }}</el-descriptions-item>
+                    <el-descriptions-item label="质检事宜" :span="2">{{ activeCase.qualityRecord.matter }}</el-descriptions-item>
+                    <el-descriptions-item label="违规截图" :span="2">
+                      <el-button v-if="activeCase.qualityRecord.screenshotUrl" link type="primary" @click="openQualityScreenshot(activeCase.qualityRecord.screenshotUrl)">查看截图</el-button>
+                      <span v-else>-</span>
+                    </el-descriptions-item>
+                  </el-descriptions>
+                </template>
+                <el-empty v-else description="暂未质检">
+                  <el-button v-if="canCreateQuality()" type="primary" @click="goToQuality(activeCase)">去质检</el-button>
+                </el-empty>
+              </el-card>
             </div>
           </template>
           <el-empty v-else description="请选择司法投诉" />

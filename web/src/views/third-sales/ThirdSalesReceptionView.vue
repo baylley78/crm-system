@@ -20,8 +20,8 @@ const activeTab = ref('pending')
 const orderDrawerVisible = ref(false)
 const orderDrawerRef = ref<InstanceType<typeof ThirdSalesOrderDrawer> | null>(null)
 const currentPage = ref(1)
-const pageSize = ref(10)
-const pageSizeOptions = [10, 20, 50, 100]
+const pageSize = ref(30)
+const pageSizeOptions = [30, 50, 100]
 
 const isPendingStatus = (status: string) => status === '待转三销' || status === 'PENDING_THIRD_SALES'
 const isFollowingStatus = (status: string) => status === '三销开发中' || status === 'THIRD_SALES_FOLLOWING' || status === '已完成三销' || status === 'COMPLETED_THIRD_SALES'
@@ -80,6 +80,8 @@ const quickCreateRefund = async (item: ThirdSalesReceptionItem) => {
     customerName: item.name,
     phone: item.phone,
     sourceStage: 'THIRD_SALES',
+    firstSalesUserId: item.firstSalesUserId,
+    firstSalesUserName: item.firstSalesUserName,
     reason: `客户在三销接待阶段申请退款，当前状态：${item.currentStatus}`,
   }
   refundDialogVisible.value = true

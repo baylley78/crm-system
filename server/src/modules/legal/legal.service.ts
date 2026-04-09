@@ -15,7 +15,7 @@ const LEGAL_FILING_REVIEW_PERMISSION = 'legal.filing.review'
 const LEGAL_PRETRIAL_HANDLE_PERMISSION = 'legal.pretrial.handle'
 const LEGAL_CLOSE_PERMISSION = 'legal.close'
 const DEFAULT_PAGE = 1
-const DEFAULT_PAGE_SIZE = 10
+const DEFAULT_PAGE_SIZE = 30
 
 @Injectable()
 export class LegalService {
@@ -99,6 +99,12 @@ export class LegalService {
           if (item.paymentScreenshotUrl) {
             result.push(this.filesService.toAccessUrl(item.paymentScreenshotUrl)!)
           }
+          if (customer.firstSalesChatRecordUrl) {
+            const accessUrl = this.filesService.toAccessUrl(customer.firstSalesChatRecordUrl)
+            if (accessUrl) {
+              result.push(accessUrl)
+            }
+          }
           return [
             ...result,
             ...this.filesService.toAccessUrls(this.filesService.parseJsonFileUrls(item.evidenceImageUrls)),
@@ -132,7 +138,7 @@ export class LegalService {
           legalUserName: latestCase?.legalUser?.realName ?? customer.legalUser?.realName,
           progressStatus: latestCase?.progressStatus ?? (customer.currentStatus === CustomerStatus.PENDING_LEGAL ? '待接案' : '处理中'),
           caseResult: latestCase?.caseResult ?? '',
-          remark: latestCase?.remark ?? '',
+          remark: latestCase?.remark ?? latestSecondSalesOrder?.remark ?? '',
           customerSituationRemark: latestSecondSalesOrder?.remark ?? latestFirstSalesOrder?.remark ?? customer.remark ?? '',
           firstSalesRemark: latestFirstSalesOrder?.remark ?? customer.remark ?? '',
           secondSalesRemark: latestSecondSalesOrder?.remark ?? '',

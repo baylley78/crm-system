@@ -15,6 +15,7 @@ const emit = defineEmits<{
 
 const detail = ref<CustomerDetail | null>(null)
 const loading = ref(false)
+const loadError = ref('')
 const saving = ref(false)
 const currentCustomerId = ref<number | null>(null)
 const refundSubmitting = ref(false)
@@ -122,6 +123,8 @@ const evidenceSourceTagTypeMap: Record<'FIRST_SALES' | 'SECOND_SALES' | 'MEDIATI
 
 const getEvidenceSourceTagType = (value: 'FIRST_SALES' | 'SECOND_SALES' | 'MEDIATION' | 'THIRD_SALES') => evidenceSourceTagTypeMap[value]
 
+const getLoadErrorMessage = (error: any) => error?.response?.data?.message || error?.message || '客户详情加载失败'
+
 const openAttachmentPreview = (url?: string, title = '附件预览') => {
   const absoluteUrl = toAbsoluteFileUrl(url)
   if (!absoluteUrl) {
@@ -166,12 +169,19 @@ const scrollToSection = async (section?: CustomerDetailFocusSection) => {
 
 const loadDetail = async (id: number, options?: { focusSection?: CustomerDetailFocusSection }) => {
   currentCustomerId.value = id
+  detail.value = null
+  loadError.value = ''
+  activePanels.value = ['profile']
+  resetForm()
   loading.value = true
   try {
     detail.value = await fetchCustomerDetail(id)
-    activePanels.value = ['profile']
     resetForm()
     await scrollToSection(options?.focusSection)
+  } catch (error: any) {
+    detail.value = null
+    loadError.value = getLoadErrorMessage(error)
+    ElMessage.error(loadError.value)
   } finally {
     loading.value = false
   }
@@ -208,6 +218,7 @@ const submit = async () => {
     }
 
     detail.value = nextDetail
+    loadError.value = ''
     ElMessage.success('客户跟进已保存')
     resetForm()
     emit('updated')
@@ -228,6 +239,8 @@ const quickCreateRefund = async () => {
     customerName: detail.value.name,
     phone: detail.value.phone,
     sourceStage: 'CUSTOMER',
+    firstSalesUserId: detail.value.firstSalesUserId,
+    firstSalesUserName: detail.value.ownerChain.firstSalesUserName,
     reason: `客户在客户详情发起退款申请，当前状态：${detail.value.currentStatus}`,
     remark: detail.value.remark || '',
   }
@@ -240,8 +253,8 @@ defineExpose({ loadDetail })
 
 <template>
   <el-drawer v-model="visible" title="客户详情" size="70%" class="customer-detail-drawer">
-    <template v-if="detail">
-      <div v-loading="loading" ref="drawerBodyRef" class="page-stack customer-detail-drawer-body">
+    <div v-loading="loading" ref="drawerBodyRef" class="page-stack customer-detail-drawer-body">
+      <template v-if="detail">
         <el-card>
           <div class="section-nav">
             <el-button text type="primary" @click="goToSection('sales-summary')">客户情况</el-button>
@@ -750,8 +763,14 @@ defineExpose({ loadDetail })
           </el-card>
         </el-collapse-item>
       </el-collapse>
+      </template>
+      <el-result v-else-if="loadError" icon="warning" title="客户详情加载失败" :sub-title="loadError">
+        <template #extra>
+          <el-button type="primary" :loading="loading" @click="currentCustomerId && loadDetail(currentCustomerId)">重试</el-button>
+        </template>
+      </el-result>
+      <el-empty v-else description="请选择客户后查看详情" />
     </div>
-    </template>
     <el-dialog v-model="attachmentPreviewVisible" :title="attachmentPreviewTitle" width="800px">
       <div class="page-stack-sm">
         <img

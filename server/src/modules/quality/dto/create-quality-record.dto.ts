@@ -10,6 +10,16 @@ export class CreateQualityRecordDto {
   @Type(() => Number)
   responsibleId: number
 
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  customerId?: number
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  judicialComplaintCaseId?: number
+
   @IsString()
   @IsNotEmpty()
   matter: string

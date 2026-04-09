@@ -131,6 +131,7 @@ export class FirstSalesService implements OnModuleInit {
           paymentAccountName: paymentAccount.accountName,
           paymentSerialNo: dto.paymentSerialNo,
           paymentScreenshotUrl,
+          chatRecordUrl,
           evidenceImageUrls,
           paymentStatus: arrearsAmount === 0 ? 'PAID' : 'PARTIAL',
           orderDate,
@@ -222,6 +223,7 @@ export class FirstSalesService implements OnModuleInit {
       paymentAccountName: paymentAccount.accountName,
       paymentSerialNo: dto.paymentSerialNo,
       paymentScreenshotUrl,
+      chatRecordUrl,
       evidenceImageUrls,
       orderDate,
       remark: dto.remark,
@@ -344,6 +346,7 @@ export class FirstSalesService implements OnModuleInit {
           paymentAccountName: paymentAccount.accountName,
           paymentSerialNo: dto.paymentSerialNo,
           paymentScreenshotUrl,
+          chatRecordUrl,
           evidenceImageUrls,
           paymentStatus: arrearsAmount === 0 ? 'PAID' : 'PARTIAL',
           orderDate,
@@ -703,6 +706,7 @@ export class FirstSalesService implements OnModuleInit {
     paymentAccountName: string
     paymentSerialNo: string
     paymentScreenshotUrl?: string
+    chatRecordUrl?: string
     evidenceImageUrls?: string
     orderDate?: Date
     remark?: string
@@ -721,6 +725,7 @@ export class FirstSalesService implements OnModuleInit {
         paymentAccountName: params.paymentAccountName,
         paymentSerialNo: params.paymentSerialNo,
         paymentScreenshotUrl: params.paymentScreenshotUrl,
+        chatRecordUrl: params.chatRecordUrl,
         evidenceImageUrls: params.evidenceImageUrls,
         paymentStatus: params.arrearsAmount === 0 ? 'PAID' : 'PARTIAL',
         orderDate: params.orderDate ?? new Date(),
@@ -818,8 +823,16 @@ export class FirstSalesService implements OnModuleInit {
     }
   }
 
-  private resolveFirstSalesTeamName(firstSalesUser?: { departmentInfo?: { name?: string | null; parent?: { name?: string | null } | null } | null } | null) {
+  private resolveFirstSalesTeamName(firstSalesUser?: { departmentInfo?: { id?: number | null; name?: string | null; parent?: { name?: string | null } | null } | null } | null) {
     return firstSalesUser?.departmentInfo?.parent?.name || firstSalesUser?.departmentInfo?.name || undefined
+  }
+
+  private resolveFirstSalesDepartmentId(firstSalesUser?: { departmentInfo?: { id?: number | null } | null } | null) {
+    return firstSalesUser?.departmentInfo?.id || undefined
+  }
+
+  private resolveFirstSalesDepartmentName(firstSalesUser?: { departmentInfo?: { name?: string | null } | null } | null) {
+    return firstSalesUser?.departmentInfo?.name || undefined
   }
 
   private mapOrder(order: {
@@ -834,6 +847,7 @@ export class FirstSalesService implements OnModuleInit {
     paymentAccountId?: number | null
     paymentSerialNo?: string | null
     paymentScreenshotUrl?: string | null
+    chatRecordUrl?: string | null
     evidenceImageUrls?: string | null
     paymentStatus?: string | null
     financeReviewStatus: FinanceReviewStatus
@@ -856,6 +870,7 @@ export class FirstSalesService implements OnModuleInit {
       currentStatus: CustomerStatus
       firstSalesUser?: {
         departmentInfo?: {
+          id?: number | null
           name?: string | null
           parent?: {
             name?: string | null
@@ -892,11 +907,14 @@ export class FirstSalesService implements OnModuleInit {
       paymentAccountId: order.paymentAccountId,
       paymentSerialNo: order.paymentSerialNo,
       paymentScreenshotUrl: this.filesService.toAccessUrl(order.paymentScreenshotUrl),
+      chatRecordUrl: this.filesService.toAccessUrl(order.chatRecordUrl),
       evidenceImageUrls: this.filesService.toAccessUrls(this.parseEvidenceImageUrls(order.evidenceImageUrls)),
       paymentStatus: this.mapPaymentStatus(order.paymentStatus),
       currentStatus: this.mapCustomerStatus(order.customer.currentStatus),
       salesUserName: order.salesUser.realName,
+      firstSalesDepartmentId: this.resolveFirstSalesDepartmentId(order.customer.firstSalesUser),
       firstSalesTeamName: this.resolveFirstSalesTeamName(order.customer.firstSalesUser),
+      firstSalesDepartmentName: this.resolveFirstSalesDepartmentName(order.customer.firstSalesUser),
       financeReviewStatus: order.financeReviewStatus,
       financeReviewStatusLabel: this.mapFinanceReviewStatus(order.financeReviewStatus),
       financeReviewerId: order.financeReviewerId ?? undefined,

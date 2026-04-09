@@ -46,6 +46,15 @@ export class CreateRefundCaseDto {
   @IsOptional()
   @IsNumber()
   @Type(() => Number)
+  firstSalesUserId?: number
+
+  @IsOptional()
+  @IsString()
+  firstSalesUserName?: string
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
   firstSalesDepartmentId?: number
 
   @IsString()

@@ -21,13 +21,12 @@ const assignSubmitting = ref(false)
 const assigningCustomer = ref<SecondSalesAssignmentItem | null>(null)
 const dialogSelectedUserId = ref<number | null>(null)
 const currentPage = ref(1)
-const pageSize = ref(10)
-const pageSizeOptions = [10, 20, 50, 100]
+const pageSize = ref(30)
+const pageSizeOptions = [30, 50, 100]
 
 const canAssignSecondSales = () => hasPermission('secondSales.assign')
 const canTransferSecondSales = () => hasPermission('secondSales.transfer')
 const canCreateSecondSales = () => hasPermission('secondSales.create')
-const canViewSecondSalesUsers = () => hasPermission('secondSales.users.view')
 const canCreateRefund = () => hasPermission('refund.create')
 
 const isPendingStatus = (status: string) => status === '待分配二销' || status === 'PENDING_SECOND_SALES_ASSIGNMENT'
@@ -82,11 +81,7 @@ const formatStatus = (status: string) => {
 const loadData = async () => {
   loading.value = true
   try {
-    const requests: Array<Promise<unknown>> = [fetchSecondSalesAssignments()]
-    if (canViewSecondSalesUsers()) {
-      requests.push(fetchSecondSalesUsers())
-    }
-    const [assignmentList, userList] = await Promise.all(requests)
+    const [assignmentList, userList] = await Promise.all([fetchSecondSalesAssignments(), fetchSecondSalesUsers()])
     customers.value = assignmentList as SecondSalesAssignmentItem[]
     users.value = (userList as SalesUserOption[] | undefined) || []
     const hasPendingCustomers = customers.value.some((item) => isPendingStatus(item.currentStatus))
@@ -158,6 +153,8 @@ const quickCreateRefund = async (customer: SecondSalesAssignmentItem) => {
     customerName: customer.name,
     phone: customer.phone,
     sourceStage: 'SECOND_SALES',
+    firstSalesUserId: customer.firstSalesUserId,
+    firstSalesUserName: customer.firstSalesUserName,
     reason: `客户在二销阶段申请退款，当前状态：${formatStatus(customer.currentStatus)}`,
     remark: customer.remark || '',
   }

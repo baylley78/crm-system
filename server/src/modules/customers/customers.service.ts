@@ -10,7 +10,7 @@ import { CreateCustomerFollowDto } from './dto/create-customer-follow.dto'
 import { UpdateCustomerStatusDto } from './dto/update-customer-status.dto'
 
 const DEFAULT_PAGE = 1
-const DEFAULT_PAGE_SIZE = 10
+const DEFAULT_PAGE_SIZE = 30
 
 @Injectable()
 export class CustomersService {
@@ -164,6 +164,12 @@ export class CustomersService {
     return this.mapCustomerDetail(customer, currentUser)
   }
 
+  async findOneForPerformanceForm(currentUser: AuthenticatedUser, id: number) {
+    const customer = await this.getCustomerByIdForPerformanceForm(currentUser, id)
+
+    return this.mapCustomerDetail(customer, currentUser)
+  }
+
   async createFollow(currentUser: AuthenticatedUser, id: number, dto: CreateCustomerFollowDto) {
     const customer = await this.getCustomerById(currentUser, id)
 
@@ -226,11 +232,50 @@ export class CustomersService {
   private async getCustomerById(currentUser: AuthenticatedUser, id: number) {
     const visibilityWhere = await this.buildCustomerVisibilityWhere(currentUser)
 
-    const customer = await this.prisma.customer.findFirst({
-      where: {
-        id,
-        ...visibilityWhere,
-      },
+    const customer = await this.findCustomerDetailByWhere({
+      id,
+      ...visibilityWhere,
+    })
+
+    if (!customer) {
+      const exists = await this.prisma.customer.findUnique({
+        where: { id },
+        select: { id: true },
+      })
+      if (exists) {
+        throw new ForbiddenException('无权访问该客户')
+      }
+      throw new NotFoundException('客户不存在')
+    }
+
+    return customer
+  }
+
+  private async getCustomerByIdForPerformanceForm(currentUser: AuthenticatedUser, id: number) {
+    const visibilityWhere = await this.buildPerformanceFormCustomerVisibilityWhere(currentUser)
+
+    const customer = await this.findCustomerDetailByWhere({
+      id,
+      ...visibilityWhere,
+    })
+
+    if (!customer) {
+      const exists = await this.prisma.customer.findUnique({
+        where: { id },
+        select: { id: true },
+      })
+      if (exists) {
+        throw new ForbiddenException('无权访问该客户')
+      }
+      throw new NotFoundException('客户不存在')
+    }
+
+    return customer
+  }
+
+  private findCustomerDetailByWhere(where: Prisma.CustomerWhereInput) {
+    return this.prisma.customer.findFirst({
+      where,
       include: {
         firstSalesUser: {
           include: {
@@ -298,19 +343,33 @@ export class CustomersService {
         },
       },
     })
+  }
 
-    if (!customer) {
-      const exists = await this.prisma.customer.findUnique({
-        where: { id },
-        select: { id: true },
-      })
-      if (exists) {
-        throw new ForbiddenException('无权访问该客户')
+  async buildPerformanceFormCustomerVisibilityWhere(currentUser: AuthenticatedUser): Promise<Prisma.CustomerWhereInput> {
+    const baseVisibilityWhere = await this.buildCustomerVisibilityWhere(currentUser)
+
+    if (currentUser.permissions?.includes('firstSales.create') || currentUser.permissions?.includes('firstSales.edit')) {
+      return {
+        OR: [{ firstSalesUserId: currentUser.id }, baseVisibilityWhere],
       }
-      throw new NotFoundException('客户不存在')
     }
 
-    return customer
+    if (currentUser.permissions?.includes('secondSales.create') || currentUser.permissions?.includes('secondSales.edit')) {
+      return {
+        OR: [
+          { secondSalesUserId: currentUser.id },
+          baseVisibilityWhere,
+        ],
+      }
+    }
+
+    if (currentUser.permissions?.includes('thirdSales.create') || currentUser.permissions?.includes('thirdSales.edit')) {
+      return {
+        OR: [{ thirdSalesUserId: currentUser.id }, baseVisibilityWhere],
+      }
+    }
+
+    return baseVisibilityWhere
   }
 
   async buildCustomerVisibilityWhere(currentUser: AuthenticatedUser): Promise<Prisma.CustomerWhereInput> {
@@ -357,10 +416,18 @@ export class CustomersService {
   }
 
   private mapCustomerDetail(customer: any, currentUser: AuthenticatedUser) {
-    const latestLegalCase = customer.legalCases[0]
-    const latestMediationCase = customer.mediationCases[0]
+    const latestLegalCase = customer.legalCases?.[0]
+    const latestMediationCase = customer.mediationCases?.[0]
+    const contractArchives = customer.contractArchives || []
+    const firstSalesOrders = customer.firstSalesOrders || []
+    const secondSalesOrders = customer.secondSalesOrders || []
+    const thirdSalesOrders = customer.thirdSalesOrders || []
+    const approvals = customer.approvals || []
+    const refundCases = customer.refundCases || []
+    const qualityRecords = customer.qualityRecords || []
+    const followLogs = customer.followLogs || []
     const contractArchiveMap = new Map(
-      customer.contractArchives.map((item: any) => [
+      contractArchives.map((item: any) => [
         `${item.salesStage}-${item.relatedOrderId}`,
         {
           id: item.id,
@@ -374,7 +441,7 @@ export class CustomersService {
       ]),
     )
 
-    const firstSalesEvidence = customer.firstSalesOrders.flatMap((item: any) => {
+    const firstSalesEvidence = firstSalesOrders.flatMap((item: any) => {
       const result = [] as Array<{ label: string; url: string; source: 'FIRST_SALES' | 'SECOND_SALES' | 'MEDIATION' | 'THIRD_SALES' }>
       if (item.paymentScreenshotUrl) {
         const accessUrl = this.filesService.toAccessUrl(item.paymentScreenshotUrl)
@@ -394,7 +461,7 @@ export class CustomersService {
       return result
     })
 
-    const secondSalesEvidence = customer.secondSalesOrders.flatMap((item: any) => {
+    const secondSalesEvidence = secondSalesOrders.flatMap((item: any) => {
       const result = [] as Array<{ label: string; url: string; source: 'FIRST_SALES' | 'SECOND_SALES' | 'MEDIATION' | 'THIRD_SALES' }>
       if (item.paymentScreenshotUrl) {
         const accessUrl = this.filesService.toAccessUrl(item.paymentScreenshotUrl)
@@ -420,7 +487,7 @@ export class CustomersService {
       source: 'MEDIATION' as const,
     }))
 
-    const thirdSalesEvidence = customer.thirdSalesOrders.flatMap((item: any) =>
+    const thirdSalesEvidence = thirdSalesOrders.flatMap((item: any) =>
       this.filesService.toAccessUrls(this.filesService.parseJsonFileUrls(item.evidenceFileUrls)).map((url) => ({
         label: '三销证据',
         url,
@@ -492,10 +559,10 @@ export class CustomersService {
       },
       salesSummary: {
         customerRemark: customer.remark,
-        firstSalesRemark: customer.firstSalesOrders[0]?.remark,
-        secondSalesRemark: customer.secondSalesOrders[0]?.remark,
+        firstSalesRemark: firstSalesOrders[0]?.remark,
+        secondSalesRemark: secondSalesOrders[0]?.remark,
       },
-      approvals: customer.approvals.map((item: any) => ({
+      approvals: approvals.map((item: any) => ({
         id: item.id,
         applicantName: item.applicant?.realName,
         approverName: item.approver?.realName,
@@ -508,7 +575,7 @@ export class CustomersService {
         approvedAt: item.approvedAt,
         createdAt: item.createdAt,
       })),
-      refundCases: customer.refundCases.map((item: any) => ({
+      refundCases: refundCases.map((item: any) => ({
         id: item.id,
         sourceStage: item.sourceStage,
         relatedOrderStage: item.relatedOrderStage,
@@ -525,7 +592,7 @@ export class CustomersService {
         assignedAt: item.assignedAt,
         closedAt: item.closedAt,
         createdAt: item.createdAt,
-        logs: item.logs.map((log: any) => ({
+        logs: (item.logs || []).map((log: any) => ({
           id: log.id,
           action: log.action,
           content: log.content,
@@ -533,7 +600,7 @@ export class CustomersService {
           createdAt: log.createdAt,
         })),
       })),
-      qualityRecords: customer.qualityRecords.map((item: any) => ({
+      qualityRecords: qualityRecords.map((item: any) => ({
         id: item.id,
         title: item.title,
         inspectorName: item.inspector?.realName,
@@ -543,7 +610,7 @@ export class CustomersService {
         remark: item.remark,
         createdAt: item.createdAt,
       })),
-      firstSalesOrders: customer.firstSalesOrders.map((item: any) => ({
+      firstSalesOrders: firstSalesOrders.map((item: any) => ({
         id: item.id,
         orderType: item.orderType,
         isTimelyDeal: item.isTimelyDeal,
@@ -559,7 +626,7 @@ export class CustomersService {
         contractArchive: contractArchiveMap.get(`FIRST-${item.id}`) || null,
         createdAt: item.createdAt,
       })),
-      secondSalesOrders: customer.secondSalesOrders.map((item: any) => ({
+      secondSalesOrders: secondSalesOrders.map((item: any) => ({
         id: item.id,
         secondPaymentAmount: Number(item.secondPaymentAmount),
         includesHearing: item.includesHearing,
@@ -572,7 +639,7 @@ export class CustomersService {
         contractArchive: contractArchiveMap.get(`SECOND-${item.id}`) || null,
         createdAt: item.createdAt,
       })),
-      thirdSalesOrders: customer.thirdSalesOrders.map((item: any) => ({
+      thirdSalesOrders: thirdSalesOrders.map((item: any) => ({
         id: item.id,
         thirdSalesUserName: item.thirdSalesUser?.realName,
         productName: item.productName,
@@ -584,11 +651,11 @@ export class CustomersService {
         contractArchive: contractArchiveMap.get(`THIRD-${item.id}`) || null,
         createdAt: item.createdAt,
       })),
-      followLogs: customer.followLogs.map((item: any) => ({
+      followLogs: followLogs.map((item: any) => ({
         id: item.id,
         stage: item.stage,
         content: item.content,
-        operatorName: item.operator.realName,
+        operatorName: item.operator?.realName || '-',
         nextFollowTime: item.nextFollowTime,
         createdAt: item.createdAt,
       })),

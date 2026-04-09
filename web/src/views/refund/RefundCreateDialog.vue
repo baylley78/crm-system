@@ -17,6 +17,8 @@ interface RefundDraft {
   reason?: string
   expectedRefundAmount?: number
   remark?: string
+  firstSalesUserId?: number
+  firstSalesUserName?: string
   firstSalesDepartmentId?: number
 }
 
@@ -35,6 +37,8 @@ const form = reactive<CreateRefundCasePayload>({
   customerName: '',
   phone: '',
   sourceStage: 'CUSTOMER',
+  firstSalesUserId: undefined,
+  firstSalesUserName: '',
   firstSalesDepartmentId: undefined,
   reason: '',
   expectedRefundAmount: 0,
@@ -67,6 +71,8 @@ const applyDraft = () => {
   form.customerName = props.draft?.customerName || ''
   form.phone = props.draft?.phone || ''
   form.sourceStage = props.draft?.sourceStage || 'CUSTOMER'
+  form.firstSalesUserId = props.draft?.firstSalesUserId ? Number(props.draft.firstSalesUserId) : undefined
+  form.firstSalesUserName = props.draft?.firstSalesUserName || ''
   form.firstSalesDepartmentId = props.draft?.firstSalesDepartmentId ? Number(props.draft.firstSalesDepartmentId) : undefined
   form.reason = props.draft?.reason || ''
   form.expectedRefundAmount = Number(props.draft?.expectedRefundAmount || 0)
@@ -104,6 +110,8 @@ const submit = async () => {
     customerName: form.customerName?.trim() || undefined,
     phone: form.phone?.trim() || undefined,
     sourceStage: form.sourceStage,
+    firstSalesUserId: form.firstSalesUserId,
+    firstSalesUserName: form.firstSalesUserName?.trim() || undefined,
     firstSalesDepartmentId: form.firstSalesDepartmentId,
     reason: form.reason.trim(),
     expectedRefundAmount: Number(form.expectedRefundAmount || 0),
@@ -139,6 +147,9 @@ const submit = async () => {
         <el-select v-model="form.sourceStage" style="width: 100%">
           <el-option v-for="item in sourceStageOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
+      </el-form-item>
+      <el-form-item label="一销人员">
+        <div class="static-text">{{ form.firstSalesUserName || '-' }}</div>
       </el-form-item>
       <el-form-item label="一销部门">
         <el-select v-model="form.firstSalesDepartmentId" clearable filterable :loading="departmentLoading" placeholder="可手动选择一销部门" style="width: 100%">

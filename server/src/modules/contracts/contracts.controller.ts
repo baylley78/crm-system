@@ -47,19 +47,16 @@ export class ContractsController {
   }
 
   @Get('customers')
-  @RequirePermission('contracts.customers.view')
   findCustomers(@CurrentUser() currentUser: AuthenticatedUser) {
     return this.contractsService.findCustomers(currentUser)
   }
 
   @Get('users')
-  @RequirePermission('contracts.users.view')
   findUsers() {
     return this.contractsService.findUsers()
   }
 
   @Get('customer/:id/orders')
-  @RequirePermission('contracts.orders.view')
   findCustomerOrders(@CurrentUser() currentUser: AuthenticatedUser, @Param('id') id: string) {
     return this.contractsService.findCustomerOrders(currentUser, Number(id))
   }

@@ -21,7 +21,6 @@ export class LegalController {
   }
 
   @Get('users')
-  @RequirePermission('legal.users.view')
   findUsers() {
     return this.legalService.findUsers()
   }

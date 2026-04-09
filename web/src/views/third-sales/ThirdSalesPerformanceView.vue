@@ -35,8 +35,8 @@ const previewImageUrl = ref('')
 const previewFileUrl = ref('')
 const previewFailed = ref(false)
 const currentPage = ref(1)
-const pageSize = ref(10)
-const pageSizeOptions = [10, 20, 50, 100]
+const pageSize = ref(30)
+const pageSizeOptions = [30, 50, 100]
 
 const formatDateTime = (value?: string) => value?.replace('T', ' ').slice(0, 19) || '-'
 const formatCurrency = (value?: number) => `¥${Number(value ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -104,6 +104,8 @@ const quickCreateRefund = async (order: ThirdSalesOrderListItem) => {
     sourceStage: 'THIRD_SALES',
     relatedOrderId: order.id,
     relatedOrderStage: 'THIRD',
+    firstSalesUserId: order.firstSalesUserId,
+    firstSalesUserName: order.firstSalesUserName,
     reason: `客户在三销阶段申请退款，当前业绩订单：${order.productName}`,
     remark: order.remark || '',
     expectedRefundAmount: Number(order.paymentAmount || 0),

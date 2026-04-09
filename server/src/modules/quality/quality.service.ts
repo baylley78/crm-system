@@ -1,9 +1,10 @@
-import { DataScope, Prisma } from '@prisma/client'
+import { DataScope, JudicialComplaintHandlingStatus, Prisma } from '@prisma/client'
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../../prisma/prisma.service'
 import { DepartmentsService } from '../departments/departments.service'
 import { FilesService } from '../files/files.service'
 import type { AuthenticatedUser } from '../auth/auth.service'
+import { CustomersService } from '../customers/customers.service'
 import { CreateQualityRecordDto } from './dto/create-quality-record.dto'
 
 @Injectable()
@@ -12,6 +13,7 @@ export class QualityService {
     private readonly prisma: PrismaService,
     private readonly departmentsService: DepartmentsService,
     private readonly filesService: FilesService,
+    private readonly customersService: CustomersService,
   ) {}
 
   async findRecords(currentUser: AuthenticatedUser, responsibleId?: number) {
@@ -25,20 +27,19 @@ export class QualityService {
       where,
       include: {
         responsible: true,
+        customer: true,
+        complaintCases: {
+          include: {
+            handledBy: true,
+          },
+          orderBy: { id: 'desc' },
+          take: 1,
+        },
       },
       orderBy: [{ recordDate: 'desc' }, { createdAt: 'desc' }],
     })
 
-    return records.map((item) => ({
-      id: item.id,
-      recordDate: item.recordDate,
-      responsibleId: item.responsibleId,
-      responsibleName: item.responsible.realName,
-      penaltyAmount: Number(item.penaltyAmount ?? 0),
-      matter: item.matter,
-      screenshotUrl: this.filesService.toAccessUrl(item.screenshotUrl),
-      createdAt: item.createdAt,
-    }))
+    return records.map((item) => this.mapRecord(item))
   }
 
   async findResponsibles(currentUser: AuthenticatedUser) {
@@ -71,28 +72,119 @@ export class QualityService {
 
     await this.ensureCanAccessResponsible(currentUser, responsible)
 
-    const record = await this.prisma.qualityRecord.create({
-      data: {
-        recordDate: new Date(dto.recordDate),
-        responsibleId: dto.responsibleId,
-        matter: dto.matter,
-        penaltyAmount: dto.penaltyAmount,
-        screenshotUrl: files?.screenshot?.[0] ? `/uploads/${files.screenshot[0].filename}` : undefined,
-      },
-      include: {
-        responsible: true,
-      },
+    const customer = dto.customerId
+      ? await this.prisma.customer.findFirst({
+          where: {
+            id: dto.customerId,
+            ...(await this.customersService.buildCustomerVisibilityWhere(currentUser)),
+          },
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        })
+      : null
+
+    if (dto.customerId && !customer) {
+      throw new NotFoundException('客户不存在或无权访问')
+    }
+
+    const complaintCase = dto.judicialComplaintCaseId
+      ? await this.prisma.judicialComplaintCase.findFirst({
+          where: {
+            id: dto.judicialComplaintCaseId,
+            OR: [{ customer: await this.customersService.buildCustomerVisibilityWhere(currentUser) }, { customerId: null }],
+          },
+          select: {
+            id: true,
+            customerId: true,
+            shouldHandle: true,
+            handlingStatus: true,
+          },
+        })
+      : null
+
+    if (dto.judicialComplaintCaseId && !complaintCase) {
+      throw new NotFoundException('司法投诉不存在或无权访问')
+    }
+
+    const resolvedCustomerId = dto.customerId ?? complaintCase?.customerId ?? undefined
+
+    if (dto.customerId && complaintCase?.customerId && complaintCase.customerId !== dto.customerId) {
+      throw new ForbiddenException('司法投诉与客户不匹配')
+    }
+
+    const record = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.qualityRecord.create({
+        data: {
+          recordDate: new Date(dto.recordDate),
+          responsibleId: dto.responsibleId,
+          customerId: resolvedCustomerId,
+          matter: dto.matter,
+          penaltyAmount: dto.penaltyAmount,
+          screenshotUrl: files?.screenshot?.[0] ? `/uploads/${files.screenshot[0].filename}` : undefined,
+        },
+        include: {
+          responsible: true,
+          customer: true,
+        },
+      })
+
+      if (complaintCase) {
+        await tx.judicialComplaintCase.update({
+          where: { id: complaintCase.id },
+          data: {
+            qualityRecordId: created.id,
+            qualityChecked: true,
+            qualityCheckedAt: new Date(),
+            handledById: currentUser.id,
+            handledAt: complaintCase.shouldHandle ? new Date() : undefined,
+            handlingStatus:
+              complaintCase.shouldHandle && complaintCase.handlingStatus !== JudicialComplaintHandlingStatus.HANDLED
+                ? JudicialComplaintHandlingStatus.HANDLED
+                : undefined,
+          },
+        })
+      }
+
+      return tx.qualityRecord.findUnique({
+        where: { id: created.id },
+        include: {
+          responsible: true,
+          customer: true,
+          complaintCases: {
+            include: {
+              handledBy: true,
+            },
+            orderBy: { id: 'desc' },
+            take: 1,
+          },
+        },
+      })
     })
 
+    return this.mapRecord(record)
+  }
+
+  private mapRecord(item: any) {
+    const complaintCase = item?.complaintCases?.[0]
+
     return {
-      id: record.id,
-      recordDate: record.recordDate,
-      responsibleId: record.responsibleId,
-      responsibleName: record.responsible.realName,
-      penaltyAmount: Number(record.penaltyAmount ?? 0),
-      matter: record.matter,
-      screenshotUrl: this.filesService.toAccessUrl(record.screenshotUrl),
-      createdAt: record.createdAt,
+      id: item.id,
+      recordDate: item.recordDate,
+      responsibleId: item.responsibleId,
+      responsibleName: item.responsible.realName,
+      customerId: item.customerId ?? undefined,
+      customerName: item.customer?.name,
+      customerPhone: item.customer?.phone,
+      judicialComplaintCaseId: complaintCase?.id,
+      judicialComplaintQualityCheckedAt: complaintCase?.qualityCheckedAt,
+      judicialComplaintHandledByName: complaintCase?.handledBy?.realName,
+      penaltyAmount: Number(item.penaltyAmount ?? 0),
+      matter: item.matter,
+      screenshotUrl: this.filesService.toAccessUrl(item.screenshotUrl),
+      createdAt: item.createdAt,
     }
   }
 

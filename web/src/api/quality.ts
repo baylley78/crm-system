@@ -17,6 +17,12 @@ export const createQualityRecord = async (payload: QualityCreatePayload) => {
   const formData = new FormData()
   formData.append('recordDate', payload.recordDate)
   formData.append('responsibleId', String(payload.responsibleId))
+  if (payload.customerId) {
+    formData.append('customerId', String(payload.customerId))
+  }
+  if (payload.judicialComplaintCaseId) {
+    formData.append('judicialComplaintCaseId', String(payload.judicialComplaintCaseId))
+  }
   formData.append('matter', payload.matter)
   formData.append('penaltyAmount', String(payload.penaltyAmount))
   if (payload.screenshot) {

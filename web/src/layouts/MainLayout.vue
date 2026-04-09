@@ -2,7 +2,7 @@
 import { UserFilled, Document, DataBoard, Money, Setting, Briefcase, Management, SwitchButton, Histogram, Service } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import type { TabsPaneContext } from 'element-plus'
-import { computed, ref, watch } from 'vue'
+import { computed, markRaw, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authStorage } from '../auth'
 import { hasAnyPermission } from '../utils/permissions'
@@ -11,12 +11,18 @@ const VISITED_TABS_KEY = 'crm_visited_tabs'
 const ACTIVE_TAB_KEY = 'crm_active_tab'
 const DASHBOARD_PATH = '/dashboard'
 
+type MenuChild = {
+  title: string
+  index: string
+  permission?: string
+}
+
 type MenuItem = {
   title: string
   index: string
   icon?: unknown
   permission?: string
-  children?: Array<{ title: string; index: string; permission?: string }>
+  children?: MenuChild[]
 }
 
 type VisitedTab = {
@@ -31,126 +37,121 @@ const currentUser = computed(() => authStorage.getUser())
 
 const hasPermission = (permission?: string) => !permission || currentUser.value?.permissions?.includes(permission)
 
-const menus = computed<MenuItem[]>(() => {
-  const allMenus: MenuItem[] = [
-    {
-      title: '首页',
-      index: '/dashboard',
-      icon: DataBoard,
-      permission: 'dashboard.view',
-    },
-    {
-      title: '客户管理',
-      index: '/customers',
-      icon: UserFilled,
-      permission: 'customers.view',
-    },
-    {
-      title: '合同档案',
-      index: '/contracts',
-      icon: Document,
-      permission: 'contracts.view',
-    },
-    {
-      title: '一销业绩（调解）',
-      index: '/first-sales/list',
-      icon: Money,
-      permission: 'firstSales.view',
-    },
-    {
-      title: '二销管理',
-      index: '/second-sales',
-      icon: Briefcase,
-      children: [
-        { title: '二销接待', index: '/second-sales/assignments', permission: 'secondSales.view' },
-        { title: '二销业绩列表', index: '/second-sales/litigation', permission: 'secondSales.view' },
-      ],
-    },
-    {
-      title: '法务系统',
-      index: '/legal',
-      icon: Document,
-      permission: 'legal.view',
-    },
-    {
-      title: '调解系统',
-      index: '/mediation',
-      icon: SwitchButton,
-      permission: 'mediation.view',
-    },
-    {
-      title: '售后管理',
-      index: '/after-sales',
-      icon: Service,
-      children: [
-        { title: '退款系统', index: '/refund', permission: 'refund.view' },
-        { title: '司法投诉', index: '/after-sales/judicial-complaints', permission: 'judicialComplaint.view' },
-      ],
-    },
-    {
-      title: '三销管理',
-      index: '/third-sales',
-      icon: Management,
-      children: [
-        { title: '三销接待', index: '/third-sales/reception', permission: 'thirdSales.view' },
-        { title: '三销业绩（开庭）', index: '/third-sales/performance', permission: 'thirdSales.view' },
-      ],
-    },
-    {
-      title: '业绩报表',
-      index: '/reports-group',
-      icon: Histogram,
-      permission: hasAnyPermission([
-        'reports.firstSales.view',
-        'reports.firstSales.teamView',
-        'reports.secondSales.view',
-        'reports.secondSales.teamView',
-        'reports.thirdSales.view',
-        'reports.thirdSales.teamView',
-      ])
-        ? undefined
-        : '__hidden__',
-      children: [
-        { title: '一销业绩（个人）', index: '/reports/first-sales/personal', permission: 'reports.firstSales.view' },
-        { title: '一销业绩（团队）', index: '/reports/first-sales/team', permission: 'reports.firstSales.teamView' },
-        { title: '二销业绩（个人）', index: '/reports/second-sales/personal', permission: 'reports.secondSales.view' },
-        { title: '二销业绩（团队）', index: '/reports/second-sales/team', permission: 'reports.secondSales.teamView' },
-        { title: '三销业绩（个人）', index: '/reports/third-sales/personal', permission: 'reports.thirdSales.view' },
-        { title: '三销业绩（团队）', index: '/reports/third-sales/team', permission: 'reports.thirdSales.teamView' },
-      ],
-    },
-    {
-      title: 'OA审批',
-      index: '/oa',
-      icon: Document,
-      children: [
-        { title: '报销申请', index: '/oa/reimbursements', permission: 'oa.approvals.view' },
-        { title: '请假申请', index: '/oa/leaves', permission: 'oa.approvals.view' },
-        { title: '补卡申请', index: '/oa/punch-cards', permission: 'oa.approvals.view' },
-      ],
-    },
-    {
-      title: '质检管理',
-      index: '/quality',
-      icon: Document,
-      permission: 'quality.view',
-    },
-    {
-      title: '系统管理',
-      index: '/system',
-      icon: Setting,
-      children: [
-        { title: '用户管理', index: '/system/users', permission: 'system.users.view' },
-        { title: '部门管理', index: '/system/departments', permission: 'system.departments.view' },
-        { title: '收款配置', index: '/system/payment-accounts', permission: 'system.paymentAccounts.manage' },
-        { title: '开庭配置', index: '/system/court-config', permission: 'system.courtConfig.manage' },
-        { title: '钉钉报单', index: '/system/dingtalk-report', permission: 'system.dingTalkReports.manage' },
-        { title: '权限组配置', index: '/system/roles', permission: 'system.roles.view' },
-        { title: '权限组人员分配', index: '/system/role-assignments', permission: 'system.roles.assign' },
-      ],
-    },
-  ]
+const allMenus: MenuItem[] = [
+  {
+    title: '首页',
+    index: '/dashboard',
+    icon: markRaw(DataBoard),
+    permission: 'dashboard.view',
+  },
+  {
+    title: '客户管理',
+    index: '/customers',
+    icon: markRaw(UserFilled),
+    permission: 'customers.view',
+  },
+  {
+    title: '合同档案',
+    index: '/contracts',
+    icon: markRaw(Document),
+    permission: 'contracts.view',
+  },
+  {
+    title: '一销业绩（调解）',
+    index: '/first-sales/list',
+    icon: markRaw(Money),
+    permission: 'firstSales.view',
+  },
+  {
+    title: '二销管理',
+    index: '/second-sales',
+    icon: markRaw(Briefcase),
+    children: [
+      { title: '二销接待', index: '/second-sales/assignments', permission: 'secondSales.view' },
+      { title: '二销业绩列表', index: '/second-sales/litigation', permission: 'secondSales.view' },
+    ],
+  },
+  {
+    title: '法务系统',
+    index: '/legal',
+    icon: markRaw(Document),
+    permission: 'legal.view',
+  },
+  {
+    title: '调解系统',
+    index: '/mediation',
+    icon: markRaw(SwitchButton),
+    permission: 'mediation.view',
+  },
+  {
+    title: '售后管理',
+    index: '/after-sales',
+    icon: markRaw(Service),
+    children: [
+      { title: '退款系统', index: '/refund', permission: 'refund.view' },
+      { title: '司法投诉', index: '/after-sales/judicial-complaints', permission: 'judicialComplaint.view' },
+      { title: '质检管理', index: '/quality', permission: 'quality.view' },
+    ],
+  },
+  {
+    title: '三销管理',
+    index: '/third-sales',
+    icon: markRaw(Management),
+    children: [
+      { title: '三销接待', index: '/third-sales/reception', permission: 'thirdSales.view' },
+      { title: '三销业绩（开庭）', index: '/third-sales/performance', permission: 'thirdSales.view' },
+    ],
+  },
+  {
+    title: '业绩报表',
+    index: '/reports-group',
+    icon: markRaw(Histogram),
+    permission: hasAnyPermission([
+      'reports.firstSales.view',
+      'reports.firstSales.teamView',
+      'reports.secondSales.view',
+      'reports.secondSales.teamView',
+      'reports.thirdSales.view',
+      'reports.thirdSales.teamView',
+    ])
+      ? undefined
+      : '__hidden__',
+    children: [
+      { title: '一销业绩（个人）', index: '/reports/first-sales/personal', permission: 'reports.firstSales.view' },
+      { title: '一销业绩（团队）', index: '/reports/first-sales/team', permission: 'reports.firstSales.teamView' },
+      { title: '二销业绩（个人）', index: '/reports/second-sales/personal', permission: 'reports.secondSales.view' },
+      { title: '二销业绩（团队）', index: '/reports/second-sales/team', permission: 'reports.secondSales.teamView' },
+      { title: '三销业绩（个人）', index: '/reports/third-sales/personal', permission: 'reports.thirdSales.view' },
+      { title: '三销业绩（团队）', index: '/reports/third-sales/team', permission: 'reports.thirdSales.teamView' },
+    ],
+  },
+  {
+    title: 'OA审批',
+    index: '/oa',
+    icon: markRaw(Document),
+    children: [
+      { title: '报销申请', index: '/oa/reimbursements', permission: 'oa.approvals.view' },
+      { title: '请假申请', index: '/oa/leaves', permission: 'oa.approvals.view' },
+      { title: '补卡申请', index: '/oa/punch-cards', permission: 'oa.approvals.view' },
+    ],
+  },
+  {
+    title: '系统管理',
+    index: '/system',
+    icon: markRaw(Setting),
+    children: [
+      { title: '用户管理', index: '/system/users', permission: 'system.users.view' },
+      { title: '部门管理', index: '/system/departments', permission: 'system.departments.view' },
+      { title: '收款配置', index: '/system/payment-accounts', permission: 'system.paymentAccounts.manage' },
+      { title: '开庭配置', index: '/system/court-config', permission: 'system.courtConfig.manage' },
+      { title: '钉钉报单', index: '/system/dingtalk-report', permission: 'system.dingTalkReports.manage' },
+      { title: '权限组配置', index: '/system/roles', permission: 'system.roles.view' },
+      { title: '权限组人员分配', index: '/system/role-assignments', permission: 'system.roles.assign' },
+    ],
+  },
+]
 
+const menus = computed<MenuItem[]>(() => {
   return allMenus.reduce<MenuItem[]>((result, menu) => {
     if (!menu.children) {
       if (hasPermission(menu.permission)) {

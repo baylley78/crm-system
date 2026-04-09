@@ -52,7 +52,7 @@ export class SecondSalesService {
 
   async findOrders(currentUser: AuthenticatedUser, query?: QueryOrderListDto) {
     const page = query?.page ?? 1
-    const pageSize = query?.pageSize ?? 10
+    const pageSize = query?.pageSize ?? 30
     const skip = (page - 1) * pageSize
     const where = await this.buildVisibilityWhere(currentUser)
 
@@ -128,6 +128,7 @@ export class SecondSalesService {
 
     const createdOrderId = await this.prisma.$transaction(async (tx) => {
       const customer = existingCustomer
+      const nextStatus = dto.nextStage === 'THIRD_SALES' ? CustomerStatus.PENDING_THIRD_SALES : CustomerStatus.PENDING_LEGAL
 
       const order = await tx.secondSalesOrder.create({
         data: {
@@ -153,14 +154,45 @@ export class SecondSalesService {
         where: { id: customer.id },
         data: {
           secondSalesUserId: dto.secondSalesUserId,
-          currentOwnerId: dto.secondSalesUserId,
+          currentOwnerId: dto.nextStage === 'THIRD_SALES' ? dto.secondSalesUserId : customer.legalUserId ?? customer.currentOwnerId,
           secondPaymentAmount: { increment: dto.secondPaymentAmount },
           totalPaymentAmount: { increment: dto.secondPaymentAmount },
           arrearsAmount: { decrement: dto.secondPaymentAmount },
-          currentStatus: dto.nextStage === 'THIRD_SALES' ? CustomerStatus.PENDING_THIRD_SALES : CustomerStatus.PENDING_LEGAL,
+          currentStatus: nextStatus,
           thirdSalesSourceStage: dto.nextStage === 'THIRD_SALES' ? 'SECOND_SALES' : null,
         },
       })
+
+      if (dto.nextStage === 'LEGAL' && customer.legalUserId) {
+        const latestLegalCase = await tx.legalCase.findFirst({
+          where: { customerId: customer.id },
+          orderBy: { createdAt: 'desc' },
+        })
+
+        if (!latestLegalCase) {
+          await tx.legalCase.create({
+            data: {
+              customerId: customer.id,
+              legalUserId: customer.legalUserId,
+              progressStatus: '待接案',
+              caseResult: '',
+              remark: dto.remark,
+              startDate: new Date(),
+              isCompleted: false,
+              filingApproved: false,
+              stage: 'ASSISTANT',
+              assistantCollected: false,
+              assistantDocumented: false,
+              archiveNeeded: false,
+              archiveCompleted: false,
+              filingReviewed: false,
+              transferredToPreTrial: false,
+              closeResult: '',
+              acceptedAt: new Date(),
+            },
+          })
+        }
+      }
 
       return order.id
     })

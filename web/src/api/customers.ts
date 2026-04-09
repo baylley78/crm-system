@@ -16,8 +16,13 @@ export const fetchCustomers = async (params: CustomerFilters = {}) => {
   return data
 }
 
-export const fetchCustomerDetail = async (id: number) => {
+export const fetchCustomerDetail = async (id: number | string) => {
   const { data } = await request.get<CustomerDetail>(`/customers/${id}`)
+  return data
+}
+
+export const fetchPerformanceFormCustomerDetail = async (id: number) => {
+  const { data } = await request.get<CustomerDetail>(`/customers/${id}/performance-form`)
   return data
 }
 

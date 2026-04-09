@@ -13,7 +13,7 @@ import { QueryRefundCasesDto } from './dto/query-refund-cases.dto'
 import { UpdateRefundFirstSalesDepartmentDto } from './dto/update-refund-first-sales-department.dto'
 
 const DEFAULT_PAGE = 1
-const DEFAULT_PAGE_SIZE = 10
+const DEFAULT_PAGE_SIZE = 30
 const REFUND_ROLE_CODES = ['SUPER_ADMIN', 'AFTER_SALES_MANAGER', 'AFTER_SALES']
 const ACTIVE_REFUND_STATUSES = [RefundStatus.PENDING_REVIEW, RefundStatus.PENDING_ASSIGNMENT, RefundStatus.PROCESSING]
 
@@ -100,7 +100,35 @@ export class RefundService {
       throw new NotFoundException('退款工单不存在')
     }
 
-    return this.mapRefundCase(item, true)
+    const [latestComplaint, latestQualityRecord] = await Promise.all([
+      this.prisma.judicialComplaintCase.findFirst({
+        where: { customerId: item.customerId },
+        include: {
+          qualityRecord: {
+            include: {
+              responsible: true,
+            },
+          },
+        },
+        orderBy: [{ complaintTime: 'desc' }, { createdAt: 'desc' }],
+      }),
+      this.prisma.qualityRecord.findFirst({
+        where: { customerId: item.customerId },
+        include: {
+          responsible: true,
+          complaintCases: {
+            include: {
+              handledBy: true,
+            },
+            orderBy: { id: 'desc' },
+            take: 1,
+          },
+        },
+        orderBy: [{ recordDate: 'desc' }, { createdAt: 'desc' }],
+      }),
+    ])
+
+    return this.mapRefundCase(item, true, latestComplaint, latestQualityRecord)
   }
 
   async findUsers() {
@@ -224,6 +252,7 @@ export class RefundService {
           })
 
       const firstSalesSnapshot = await this.resolveFirstSalesDepartmentSnapshot(dto.firstSalesDepartmentId, customer)
+      const firstSalesUserSnapshot = this.resolveFirstSalesUserSnapshot(dto, customer)
 
       const refundCase = await tx.refundCase.create({
         data: {
@@ -231,6 +260,8 @@ export class RefundService {
           sourceStage: dto.sourceStage as RefundSourceStage,
           relatedOrderId: dto.relatedOrderId,
           relatedOrderStage: dto.relatedOrderStage as ContractSalesStage | undefined,
+          firstSalesUserId: firstSalesUserSnapshot.userId,
+          firstSalesUserName: firstSalesUserSnapshot.userName,
           firstSalesDepartmentId: firstSalesSnapshot.departmentId,
           firstSalesDepartmentName: firstSalesSnapshot.departmentName,
           firstSalesTeamName: firstSalesSnapshot.teamName,
@@ -252,6 +283,8 @@ export class RefundService {
             customerId: resolvedCustomer.id,
             customerName: resolvedCustomer.name,
             phone: resolvedCustomer.phone,
+            firstSalesUserId: firstSalesUserSnapshot.userId,
+            firstSalesUserName: firstSalesUserSnapshot.userName,
             firstSalesDepartmentName: firstSalesSnapshot.departmentName,
             firstSalesTeamName: firstSalesSnapshot.teamName,
           }),
@@ -643,6 +676,21 @@ export class RefundService {
     return refundCase
   }
 
+  private resolveFirstSalesUserSnapshot(
+    dto: Pick<CreateRefundCaseDto, 'firstSalesUserId' | 'firstSalesUserName'>,
+    customer?: {
+      firstSalesUser?: {
+        id: number
+        realName?: string | null
+      } | null
+    } | null,
+  ) {
+    return {
+      userId: dto.firstSalesUserId ?? customer?.firstSalesUser?.id,
+      userName: dto.firstSalesUserName?.trim() || customer?.firstSalesUser?.realName || undefined,
+    }
+  }
+
   private async resolveFirstSalesDepartmentSnapshot(
     firstSalesDepartmentId: number | undefined,
     customer?: {
@@ -680,12 +728,13 @@ export class RefundService {
     }
   }
 
-  private buildCreateLogContent(dto: CreateRefundCaseDto & { firstSalesDepartmentName?: string; firstSalesTeamName?: string }) {
+  private buildCreateLogContent(dto: CreateRefundCaseDto & { firstSalesUserName?: string; firstSalesDepartmentName?: string; firstSalesTeamName?: string }) {
     const parts = [
       `发起退款申请`,
       `来源：${this.mapSourceStage(dto.sourceStage as RefundSourceStage)}`,
       dto.relatedOrderStage ? `关联订单阶段：${dto.relatedOrderStage}` : '',
       dto.relatedOrderId ? `关联订单ID：${dto.relatedOrderId}` : '',
+      dto.firstSalesUserName ? `一销人员：${dto.firstSalesUserName}` : '',
       dto.firstSalesTeamName ? `一销团队：${dto.firstSalesTeamName}` : '',
       dto.firstSalesDepartmentName ? `一销部门：${dto.firstSalesDepartmentName}` : '',
       dto.expectedRefundAmount !== undefined ? `期望退款金额：${dto.expectedRefundAmount}` : '',
@@ -750,7 +799,49 @@ export class RefundService {
     return `KH${datePart}${timePart}`
   }
 
-  private mapRefundCase(item: any, includeCustomerDetail = false) {
+  private mapComplaintHandlingStatus(status: 'PENDING' | 'PROCESSING' | 'HANDLED' | 'IGNORED') {
+    const labels: Record<'PENDING' | 'PROCESSING' | 'HANDLED' | 'IGNORED', string> = {
+      PENDING: '待处理',
+      PROCESSING: '处理中',
+      HANDLED: '已处理',
+      IGNORED: '无需处理',
+    }
+
+    return labels[status]
+  }
+
+  private mapRefundCase(item: any, includeCustomerDetail = false, complaint?: any, qualityRecord?: any) {
+    const relatedComplaint = complaint
+      ? {
+          id: complaint.id,
+          complaintSubject: complaint.complaintSubject,
+          handlingStatus: complaint.handlingStatus,
+          handlingStatusLabel: this.mapComplaintHandlingStatus(complaint.handlingStatus),
+          shouldHandle: complaint.shouldHandle,
+          qualityChecked: Boolean(complaint.qualityChecked),
+          qualityCheckedAt: complaint.qualityCheckedAt,
+          complaintTime: complaint.complaintTime,
+          complaintReason: complaint.complaintReason,
+          qualityRecordId: complaint.qualityRecordId ?? undefined,
+        }
+      : undefined
+    const relatedQualityRecord = qualityRecord
+      ? {
+          id: qualityRecord.id,
+          recordDate: qualityRecord.recordDate,
+          responsibleId: qualityRecord.responsibleId,
+          responsibleName: qualityRecord.responsible?.realName,
+          customerId: qualityRecord.customerId ?? undefined,
+          judicialComplaintCaseId: qualityRecord.complaintCases?.[0]?.id,
+          judicialComplaintQualityCheckedAt: qualityRecord.complaintCases?.[0]?.qualityCheckedAt,
+          judicialComplaintHandledByName: qualityRecord.complaintCases?.[0]?.handledBy?.realName,
+          penaltyAmount: Number(qualityRecord.penaltyAmount ?? 0),
+          matter: qualityRecord.matter,
+          screenshotUrl: qualityRecord.screenshotUrl,
+          createdAt: qualityRecord.createdAt,
+        }
+      : undefined
+
     return {
       id: item.id,
       customerId: item.customerId,
@@ -761,6 +852,8 @@ export class RefundService {
       sourceStageLabel: this.mapSourceStage(item.sourceStage),
       relatedOrderId: item.relatedOrderId ?? undefined,
       relatedOrderStage: item.relatedOrderStage ?? undefined,
+      firstSalesUserId: item.firstSalesUserId ?? undefined,
+      firstSalesUserName: item.firstSalesUserName ?? undefined,
       firstSalesDepartmentId: item.firstSalesDepartmentId ?? undefined,
       firstSalesDepartmentName: item.firstSalesDepartmentName ?? undefined,
       firstSalesTeamName: item.firstSalesTeamName ?? undefined,
@@ -789,6 +882,8 @@ export class RefundService {
         operatorName: log.operator?.realName,
         createdAt: log.createdAt,
       })),
+      relatedComplaint,
+      relatedQualityRecord,
       customer: includeCustomerDetail
         ? {
             id: item.customer?.id,

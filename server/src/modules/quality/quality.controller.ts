@@ -50,7 +50,6 @@ export class QualityController {
   }
 
   @Get('responsibles')
-  @RequirePermission('quality.responsibles.view')
   findResponsibles(@CurrentUser() currentUser: AuthenticatedUser) {
     return this.qualityService.findResponsibles(currentUser)
   }

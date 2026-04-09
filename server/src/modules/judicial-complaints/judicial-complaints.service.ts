@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { JudicialComplaintHandlingStatus } from '@prisma/client'
 import { PrismaService } from '../../prisma/prisma.service'
+import { FilesService } from '../files/files.service'
 import type { AuthenticatedUser } from '../auth/auth.service'
 import { CustomersService } from '../customers/customers.service'
 import { CreateJudicialComplaintDto } from './dto/create-judicial-complaint.dto'
@@ -8,13 +9,14 @@ import { QueryJudicialComplaintsDto } from './dto/query-judicial-complaints.dto'
 import { SearchJudicialComplaintCustomerDto } from './dto/search-judicial-complaint-customer.dto'
 
 const DEFAULT_PAGE = 1
-const DEFAULT_PAGE_SIZE = 10
+const DEFAULT_PAGE_SIZE = 30
 
 @Injectable()
 export class JudicialComplaintsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly customersService: CustomersService,
+    private readonly filesService: FilesService,
   ) {}
 
   async findCases(currentUser: AuthenticatedUser, query: QueryJudicialComplaintsDto) {
@@ -34,6 +36,12 @@ export class JudicialComplaintsService {
           customer: true,
           submittedBy: true,
           handledBy: true,
+          qualityRecord: {
+            include: {
+              responsible: true,
+              customer: true,
+            },
+          },
         },
         orderBy: [{ complaintTime: 'desc' }, { createdAt: 'desc' }],
         skip,
@@ -57,6 +65,12 @@ export class JudicialComplaintsService {
         customer: true,
         submittedBy: true,
         handledBy: true,
+        qualityRecord: {
+          include: {
+            responsible: true,
+            customer: true,
+          },
+        },
       },
     })
 
@@ -187,6 +201,12 @@ export class JudicialComplaintsService {
         customer: true,
         submittedBy: true,
         handledBy: true,
+        qualityRecord: {
+          include: {
+            responsible: true,
+            customer: true,
+          },
+        },
       },
     })
 
@@ -233,6 +253,27 @@ export class JudicialComplaintsService {
       handlingStatus: item.handlingStatus,
       handlingStatusLabel: this.mapHandlingStatus(item.handlingStatus),
       handledAt: item.handledAt,
+      qualityChecked: Boolean(item.qualityChecked),
+      qualityCheckedAt: item.qualityCheckedAt,
+      qualityRecordId: item.qualityRecordId ?? undefined,
+      qualityRecord: item.qualityRecord
+        ? {
+            id: item.qualityRecord.id,
+            recordDate: item.qualityRecord.recordDate,
+            responsibleId: item.qualityRecord.responsibleId,
+            responsibleName: item.qualityRecord.responsible?.realName,
+            customerId: item.qualityRecord.customerId ?? undefined,
+            customerName: item.qualityRecord.customer?.name,
+            customerPhone: item.qualityRecord.customer?.phone,
+            judicialComplaintCaseId: item.id,
+            judicialComplaintQualityCheckedAt: item.qualityCheckedAt,
+            judicialComplaintHandledByName: item.handledBy?.realName,
+            penaltyAmount: Number(item.qualityRecord.penaltyAmount ?? 0),
+            matter: item.qualityRecord.matter,
+            screenshotUrl: this.filesService.toAccessUrl(item.qualityRecord.screenshotUrl),
+            createdAt: item.qualityRecord.createdAt,
+          }
+        : undefined,
       submittedById: item.submittedById,
       submittedByName: item.submittedBy?.realName,
       handledById: item.handledById ?? undefined,

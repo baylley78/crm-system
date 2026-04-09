@@ -9,10 +9,6 @@ import { createContractArchive, fetchContractArchives, fetchContractCustomers, f
 import type { ContractArchiveItem, ContractArchivePayload, ContractCustomerOption, ContractRelatedOrderOption, SalesUserOption } from '../../types'
 
 const canCreateContract = () => hasPermission('contracts.create')
-const canViewContractCustomers = () => hasPermission('contracts.customers.view')
-const canViewContractUsers = () => hasPermission('contracts.users.view')
-const canViewContractOrders = () => hasPermission('contracts.orders.view')
-const canOpenCreateContract = () => canCreateContract() && canViewContractCustomers() && canViewContractUsers() && canViewContractOrders()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -23,8 +19,8 @@ const specialists = ref<SalesUserOption[]>([])
 const relatedOrders = ref<ContractRelatedOrderOption[]>([])
 const contractFileList = ref<Array<{ name: string }>>([])
 const currentPage = ref(1)
-const pageSize = ref(10)
-const pageSizeOptions = [10, 20, 50, 100]
+const pageSize = ref(30)
+const pageSizeOptions = [30, 50, 100]
 const contractPreview = useAttachmentPreview('合同预览')
 
 const form = reactive<ContractArchivePayload>({
@@ -51,15 +47,7 @@ const formatDate = (value?: string) => value?.slice(0, 10) || '-'
 const loadData = async () => {
   loading.value = true
   try {
-    const requests: Array<Promise<unknown>> = [fetchContractArchives()]
-    if (canViewContractCustomers()) {
-      requests.push(fetchContractCustomers())
-    }
-    if (canViewContractUsers()) {
-      requests.push(fetchContractUsers())
-    }
-
-    const [contractList, customerList, userList] = await Promise.all(requests)
+    const [contractList, customerList, userList] = await Promise.all([fetchContractArchives(), fetchContractCustomers(), fetchContractUsers()])
     contracts.value = contractList as ContractArchiveItem[]
     customers.value = (customerList as ContractCustomerOption[] | undefined) || []
     specialists.value = (userList as SalesUserOption[] | undefined) || []
@@ -146,7 +134,7 @@ watch(
   () => form.customerId,
   async (customerId) => {
     form.relatedOrderId = 0
-    if (!customerId || !canViewContractOrders()) {
+    if (!customerId) {
       relatedOrders.value = []
       return
     }
@@ -191,7 +179,7 @@ onMounted(loadData)
       <template #header>
         <div class="page-header-row">
           <span>合同档案</span>
-          <el-button v-if="canOpenCreateContract()" type="primary" @click="openCreateDialog">新增合同</el-button>
+          <el-button v-if="canCreateContract()" type="primary" @click="openCreateDialog">新增合同</el-button>
         </div>
       </template>
 

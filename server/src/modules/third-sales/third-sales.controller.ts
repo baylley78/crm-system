@@ -45,12 +45,12 @@ export class ThirdSalesController {
   constructor(private readonly thirdSalesService: ThirdSalesService) {}
 
   @Get('users')
-  @RequirePermission('thirdSales.users.view')
   findUsers() {
     return this.thirdSalesService.findUsers()
   }
 
   @Get('orders')
+  @RequirePermission('thirdSales.orders.view')
   findOrders(@CurrentUser() currentUser: AuthenticatedUser, @Query() query: QueryOrderListDto) {
     return this.thirdSalesService.findOrders(currentUser, query)
   }

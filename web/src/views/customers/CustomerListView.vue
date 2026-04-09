@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { onActivated, onMounted, reactive, ref, watch } from 'vue'
+import { onActivated, onMounted, reactive, ref, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { hasPermission, formatPhone } from '../../utils/permissions'
 import { fetchCustomers } from '../../api/customers'
@@ -44,8 +44,8 @@ const filters = reactive<CustomerFilters>({
 })
 
 const currentPage = ref(1)
-const pageSize = ref(10)
-const pageSizeOptions = [10, 20, 50, 100]
+const pageSize = ref(30)
+const pageSizeOptions = [30, 50, 100]
 
 const statusOptions = [
   { label: '待补尾款', value: 'PENDING_TAIL_PAYMENT' },
@@ -182,7 +182,8 @@ const handleSearch = async () => {
 const openDetail = async (id: number) => {
   currentCustomerId.value = id
   drawerVisible.value = true
-  await detailDrawerRef.value?.loadDetail(id)
+  await nextTick()
+  await detailDrawerRef.value?.loadDetail(id, { focusSection: 'sales-summary' })
 }
 
 const openFollowAction = async (id: number) => {
@@ -201,6 +202,8 @@ const quickCreateRefund = async (customer: CustomerItem) => {
     customerName: customer.name,
     phone: customer.phone,
     sourceStage: 'CUSTOMER',
+    firstSalesUserId: customer.firstSalesUserId,
+    firstSalesUserName: customer.firstSalesUserName,
     reason: `客户在客户列表发起退款申请，当前状态：${customer.currentStatus}`,
     remark: customer.remark || '',
   }

@@ -18,7 +18,9 @@ const users = ref<SalesUserOption[]>([])
 const paymentAccounts = ref<PaymentAccountOption[]>([])
 const currentCustomer = ref<CustomerItem | null>(null)
 const paymentScreenshotList = ref<UploadFile[]>([])
+const chatRecordFileList = ref<UploadFile[]>([])
 const paymentScreenshotPreviewUrl = ref('')
+const chatRecordPreviewUrl = ref('')
 
 const initialForm = (): FirstSalesTailOrderPayload => ({
   salesUserId: 0,
@@ -54,7 +56,9 @@ const assignDefaultSalesUser = () => {
 const resetForm = () => {
   Object.assign(form, initialForm())
   paymentScreenshotList.value = []
+  chatRecordFileList.value = []
   paymentScreenshotPreviewUrl.value = ''
+  chatRecordPreviewUrl.value = ''
   if (currentCustomer.value) {
     form.targetAmount = Number(currentCustomer.value.arrearsAmount || 0)
     syncAmounts()
@@ -117,6 +121,42 @@ const handlePaymentScreenshotPaste = (event: ClipboardEvent) => {
   ElMessage.success('付款截图已粘贴')
 }
 
+const handleChatRecordChange = (file: { raw?: File }) => {
+  form.chatRecordFile = file.raw || null
+  chatRecordPreviewUrl.value = file.raw ? URL.createObjectURL(file.raw) : ''
+  chatRecordFileList.value = file.raw
+    ? [
+        {
+          name: file.raw.name,
+          url: chatRecordPreviewUrl.value,
+        } as UploadFile,
+      ]
+    : []
+}
+
+const handleChatRecordRemove = () => {
+  form.chatRecordFile = null
+  chatRecordFileList.value = []
+  chatRecordPreviewUrl.value = ''
+}
+
+const handleChatRecordPaste = (event: ClipboardEvent) => {
+  event.preventDefault()
+  const imageFile = Array.from(event.clipboardData?.items || [])
+    .filter((item) => item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .find(Boolean)
+
+  if (!imageFile) {
+    ElMessage.warning('请先复制图片，再粘贴到这里')
+    return
+  }
+
+  const file = new File([imageFile], imageFile.name || `chatRecord-${Date.now()}.png`, { type: imageFile.type || 'image/png' })
+  handleChatRecordChange({ raw: file })
+  ElMessage.success('聊天记录已粘贴')
+}
+
 const validateForm = () => {
   if (!currentCustomer.value) {
     ElMessage.warning('请先选择客户')
@@ -140,6 +180,11 @@ const validateForm = () => {
 
   if (!form.paymentScreenshot) {
     ElMessage.warning('请上传付款截图')
+    return false
+  }
+
+  if (!form.chatRecordFile) {
+    ElMessage.warning('补录尾款时请一并上传聊天记录')
     return false
   }
 
@@ -241,6 +286,25 @@ defineExpose({ openForCustomer })
               </el-upload>
             </div>
           </el-form-item>
+          <el-form-item label="聊天记录" class="full-width">
+            <div class="page-stack-sm full-width upload-panel">
+              <div class="paste-upload-box" tabindex="0" @paste="handleChatRecordPaste">
+                复制聊天截图后，在这里按 Ctrl+V 粘贴聊天记录
+              </div>
+              <div class="upload-tip">定金客户补录尾款时，需一并上传聊天记录</div>
+              <img v-if="chatRecordPreviewUrl" :src="chatRecordPreviewUrl" alt="聊天记录预览" class="paste-image-preview" />
+              <el-upload
+                :auto-upload="false"
+                :show-file-list="true"
+                :limit="1"
+                :file-list="chatRecordFileList"
+                :on-change="handleChatRecordChange"
+                :on-remove="handleChatRecordRemove"
+              >
+                <el-button>上传聊天记录</el-button>
+              </el-upload>
+            </div>
+          </el-form-item>
         </div>
       </el-card>
 
@@ -262,6 +326,11 @@ defineExpose({ openForCustomer })
 
 .form-actions {
   margin-top: 4px;
+}
+
+.upload-tip {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .paste-upload-box {

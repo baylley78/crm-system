@@ -82,7 +82,7 @@ export class FilesService {
     const [firstSalesOrder, customer, secondSalesOrder, thirdSalesOrder, mediationCase, contractArchive] = await Promise.all([
       this.prisma.firstSalesOrder.findFirst({
         where: {
-          OR: [{ paymentScreenshotUrl: fileUrl }, { evidenceImageUrls: { contains: fileUrl } }],
+          OR: [{ paymentScreenshotUrl: fileUrl }, { chatRecordUrl: fileUrl }, { evidenceImageUrls: { contains: fileUrl } }],
         },
         select: { customerId: true },
       }),

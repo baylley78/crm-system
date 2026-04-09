@@ -27,7 +27,7 @@ export interface PaginatedReportDetailRows {
 }
 
 const DEFAULT_PAGE = 1
-const DEFAULT_PAGE_SIZE = 10
+const DEFAULT_PAGE_SIZE = 30
 
 export interface ReportDepartmentOption {
   id: number

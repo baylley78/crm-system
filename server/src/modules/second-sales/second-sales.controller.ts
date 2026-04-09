@@ -80,11 +80,12 @@ export class SecondSalesController {
         firstSalesUser: true,
         secondSalesUser: true,
         firstSalesOrders: {
-       select: {
-  paymentScreenshotUrl: true,
-  evidenceImageUrls: true,
-  createdAt: true,
-},
+          select: {
+            paymentScreenshotUrl: true,
+            chatRecordUrl: true,
+            evidenceImageUrls: true,
+            createdAt: true,
+          },
 
           orderBy: { createdAt: 'desc' },
         },
@@ -100,7 +101,13 @@ export class SecondSalesController {
             result.push({ label: '一销付款截图', url: accessUrl, source: 'FIRST_SALES' })
           }
         }
-       
+        if (item.chatRecordUrl) {
+          const accessUrl = this.filesService.toAccessUrl(item.chatRecordUrl)
+          if (accessUrl) {
+            result.push({ label: '一销聊天记录', url: accessUrl, source: 'FIRST_SALES' })
+          }
+        }
+
         for (const url of this.filesService.toAccessUrls(this.filesService.parseJsonFileUrls(item.evidenceImageUrls))) {
           result.push({ label: '一销证据', url, source: 'FIRST_SALES' })
         }
@@ -130,7 +137,6 @@ export class SecondSalesController {
   }
 
   @Get('users')
-  @RequirePermission('secondSales.users.view')
   async getUsers() {
     const users = await this.prisma.user.findMany({ include: { role: true }, orderBy: { id: 'asc' } })
     return users
@@ -139,6 +145,7 @@ export class SecondSalesController {
   }
 
   @Get('orders')
+  @RequirePermission('secondSales.orders.view')
   async getOrders(@CurrentUser() currentUser: AuthenticatedUser, @Query() query: QueryOrderListDto) {
     return this.secondSalesService.findOrders(currentUser, query)
   }

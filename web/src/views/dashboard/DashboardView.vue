@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import homepageBanner from '../../assets/homepage-banner.jpg'
 </script>
 
 <template>
   <div class="home-page">
     <div class="home-hero">
-      <img src="/src/assets/homepage-banner.jpg" alt="首页展示图" class="home-hero-image" />
+      <img :src="homepageBanner" alt="首页展示图" class="home-hero-image" />
     </div>
   </div>
 </template>

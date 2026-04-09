@@ -33,7 +33,6 @@ const canAssignRefund = () => hasPermission('refund.assign')
 const canEditRefund = () => hasPermission('refund.edit')
 const canCloseRefund = () => hasPermission('refund.close')
 const canDeleteRefund = () => hasPermission('refund.delete')
-const canViewRefundDepartments = () => hasPermission('refund.department.view')
 const canEditRefundDepartment = () => hasPermission('refund.department.edit')
 
 const loading = ref(false)
@@ -45,8 +44,8 @@ const users = ref<SalesUserOption[]>([])
 const firstSalesDepartments = ref<RefundFirstSalesDepartmentOption[]>([])
 const activeCase = ref<RefundCaseItem | null>(null)
 const currentPage = ref(1)
-const pageSize = ref(10)
-const pageSizeOptions = [10, 20, 50, 100]
+const pageSize = ref(30)
+const pageSizeOptions = [30, 50, 100]
 
 const filters = reactive<RefundCaseFilters>({
   status: '',
@@ -106,10 +105,6 @@ const formatDateTime = (value?: string) => value?.replace('T', ' ').slice(0, 19)
 const formatCurrency = (value?: number) => `¥${Number(value ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 const loadDepartmentOptions = async () => {
-  if (!canViewRefundDepartments()) {
-    firstSalesDepartments.value = []
-    return
-  }
   departmentLoading.value = true
   try {
     firstSalesDepartments.value = await fetchRefundFirstSalesDepartments()
@@ -121,15 +116,16 @@ const loadDepartmentOptions = async () => {
 const loadData = async () => {
   loading.value = true
   try {
-    const requests: Array<Promise<unknown>> = [fetchRefundCases({ ...filters, page: currentPage.value, pageSize: pageSize.value }), fetchRefundUsers()]
-    if (canViewRefundDepartments()) {
-      requests.push(fetchRefundFirstSalesDepartments())
+    const requests: Array<Promise<unknown>> = [fetchRefundCases({ ...filters, page: currentPage.value, pageSize: pageSize.value }), fetchRefundUsers(), fetchRefundFirstSalesDepartments()]
+    const [caseResult, userList, departmentList] = await Promise.allSettled(requests)
+    if (caseResult.status !== 'fulfilled') {
+      throw caseResult.reason
     }
-    const [caseResult, userList, departmentList] = await Promise.all(requests)
-    cases.value = (caseResult as { items: RefundCaseItem[]; total: number }).items
-    total.value = (caseResult as { items: RefundCaseItem[]; total: number }).total
-    users.value = userList as SalesUserOption[]
-    firstSalesDepartments.value = (departmentList as RefundFirstSalesDepartmentOption[] | undefined) || []
+    const casePage = caseResult.value as { items: RefundCaseItem[]; total: number }
+    cases.value = casePage.items
+    total.value = casePage.total
+    users.value = userList.status === 'fulfilled' ? userList.value as SalesUserOption[] : []
+    firstSalesDepartments.value = departmentList.status === 'fulfilled' ? (departmentList.value as RefundFirstSalesDepartmentOption[]) : []
 
     if (activeCase.value) {
       const matched = cases.value.find((item) => item.id === activeCase.value?.id)
@@ -292,7 +288,7 @@ watch(currentPage, async () => {
 
 watch(departmentDialogVisible, async (value) => {
   if (value) {
-    if (!firstSalesDepartments.value.length && canViewRefundDepartments()) {
+    if (!firstSalesDepartments.value.length) {
       await loadDepartmentOptions()
     }
     resetDepartmentForm()
@@ -336,6 +332,7 @@ onMounted(loadData)
             <el-table-column label="手机号" min-width="130">
               <template #default="scope">{{ formatPhone(scope.row.phone, scope.row) }}</template>
             </el-table-column>
+            <el-table-column label="一销人员" prop="firstSalesUserName" min-width="120" />
             <el-table-column label="一销团队" prop="firstSalesTeamName" min-width="140" />
             <el-table-column label="一销部门" prop="firstSalesDepartmentName" min-width="160" />
             <el-table-column label="来源阶段" prop="sourceStageLabel" min-width="120" />
@@ -388,6 +385,7 @@ onMounted(loadData)
                 <el-descriptions-item label="客户姓名">{{ activeCase.customerName }}</el-descriptions-item>
                 <el-descriptions-item label="手机号">{{ formatPhone(activeCase.phone) }}</el-descriptions-item>
                 <el-descriptions-item label="申请人">{{ activeCase.requestedByName || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="一销人员">{{ activeCase.firstSalesUserName || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="一销团队">{{ activeCase.firstSalesTeamName || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="一销部门">{{ activeCase.firstSalesDepartmentName || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="处理人">{{ activeCase.assigneeName || '-' }}</el-descriptions-item>
@@ -413,6 +411,21 @@ onMounted(loadData)
                   <el-descriptions-item label="三销人员">{{ activeCase.customer?.thirdSalesUserName || '-' }}</el-descriptions-item>
                   <el-descriptions-item label="总回款">{{ formatCurrency(activeCase.customer?.totalPaymentAmount) }}</el-descriptions-item>
                   <el-descriptions-item label="欠款金额">{{ formatCurrency(activeCase.customer?.arrearsAmount) }}</el-descriptions-item>
+                </el-descriptions>
+              </el-card>
+
+              <el-card shadow="never">
+                <template #header>关联司法投诉 / 质检记录</template>
+                <el-descriptions :column="2" border>
+                  <el-descriptions-item label="司法投诉">{{ activeCase.relatedComplaint ? '有' : '无' }}</el-descriptions-item>
+                  <el-descriptions-item label="质检状态">{{ activeCase.relatedComplaint?.qualityChecked ? '已检查' : '未检查' }}</el-descriptions-item>
+                  <el-descriptions-item label="投诉主体">{{ activeCase.relatedComplaint?.complaintSubject || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="投诉处理">{{ activeCase.relatedComplaint?.handlingStatusLabel || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="是否需要处理">{{ activeCase.relatedComplaint ? (activeCase.relatedComplaint.shouldHandle ? '需要处理' : '无需处理') : '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="检查时间">{{ formatDateTime(activeCase.relatedComplaint?.qualityCheckedAt) }}</el-descriptions-item>
+                  <el-descriptions-item label="最近质检责任人">{{ activeCase.relatedQualityRecord?.responsibleName || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="最近处罚金额">{{ formatCurrency(activeCase.relatedQualityRecord?.penaltyAmount) }}</el-descriptions-item>
+                  <el-descriptions-item label="最近质检结论" :span="2">{{ activeCase.relatedQualityRecord?.matter || '-' }}</el-descriptions-item>
                 </el-descriptions>
               </el-card>
 

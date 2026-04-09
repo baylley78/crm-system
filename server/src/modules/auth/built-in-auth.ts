@@ -42,7 +42,7 @@ export const BUILT_IN_ROLE_CODES = [
 
 export const BUILT_IN_PERMISSION_DEFINITIONS: BuiltInPermissionDefinition[] = [
   { code: 'dashboard.view', name: '查看工作台' },
-  { code: 'customers.view', name: '查看客户管理' },
+  { code: 'customers.view', name: '查看客户管理（含客户详情与业绩录单只读资料）' },
   { code: 'customers.create', name: '新增客户档案' },
   { code: 'customers.edit', name: '编辑客户档案' },
   { code: 'customers.follow', name: '跟进客户' },
@@ -50,12 +50,8 @@ export const BUILT_IN_PERMISSION_DEFINITIONS: BuiltInPermissionDefinition[] = [
   { code: 'customers.delete', name: '删除客户档案' },
   { code: 'customers.phone.unmask', name: '查看手机号明文', description: '允许查看客户手机号明文，不再脱敏显示' },
   { code: 'customers.phone.unmask.self', name: '仅查看本人客户手机号明文', description: '允许查看本人名下客户手机号明文，非本人客户继续脱敏显示' },
-  { code: 'customers.read.performanceForm', name: '只读查看业绩录入客户资料', description: '允许在一二三销业绩录入表单中只读查看客户详情资料' },
-  { code: 'contracts.view', name: '查看合同档案' },
+  { code: 'contracts.view', name: '查看合同档案（含窗口内客户、人员、关联销售选项）' },
   { code: 'contracts.create', name: '新增合同档案' },
-  { code: 'contracts.users.view', name: '查看合同模块用户选项', description: '允许查看合同模块中的用户下拉选项' },
-  { code: 'contracts.customers.view', name: '查看合同模块客户选项', description: '允许查看合同模块中的客户下拉选项' },
-  { code: 'contracts.orders.view', name: '查看合同模块关联合同记录', description: '允许查看合同模块中的客户关联销售记录' },
   { code: 'firstSales.view', name: '查看一销业绩' },
   { code: 'firstSales.create', name: '录入一销业绩' },
   { code: 'firstSales.edit', name: '编辑一销业绩' },
@@ -66,20 +62,21 @@ export const BUILT_IN_PERMISSION_DEFINITIONS: BuiltInPermissionDefinition[] = [
   { code: 'firstSales.review.single', name: '一销财务审核', description: '允许对单笔一销订单执行财务审核' },
   { code: 'firstSales.review.batch', name: '一销批量财务审核', description: '允许批量审核一销订单' },
   { code: 'firstSales.export', name: '一销导出', description: '允许导出一销业绩数据' },
-  { code: 'secondSales.view', name: '查看二销管理' },
-  { code: 'secondSales.users.view', name: '查看二销人员选项', description: '允许查看二销模块中的二销人员下拉选项' },
+  { code: 'secondSales.view', name: '查看二销管理（含录单窗口内客户资料与人员选项）' },
   { code: 'secondSales.assignment.view', name: '查看二销接待列表', description: '允许查看二销接待与分配列表' },
+  { code: 'secondSales.orders.view', name: '查看二销业绩列表', description: '允许查看二销业绩列表与详情' },
   { code: 'secondSales.assign', name: '分配二销客户' },
   { code: 'secondSales.transfer', name: '转交二销客户到调解' },
+  { code: 'secondSales.create', name: '录入二销业绩' },
   { code: 'secondSales.edit', name: '编辑二销业绩' },
   { code: 'secondSales.time.edit', name: '修改二销录单时间', description: '允许修改二销业绩的业务录入时间' },
   { code: 'secondSales.review', name: '审核二销业绩' },
   { code: 'secondSales.review.single', name: '二销财务审核', description: '允许对单笔二销订单执行财务审核' },
   { code: 'secondSales.review.batch', name: '二销批量财务审核', description: '允许批量审核二销订单' },
   { code: 'secondSales.export', name: '二销导出', description: '允许导出二销业绩数据' },
-  { code: 'thirdSales.view', name: '查看三销管理' },
-  { code: 'thirdSales.users.view', name: '查看三销人员选项', description: '允许查看三销模块中的三销人员下拉选项' },
+  { code: 'thirdSales.view', name: '查看三销管理（含录单窗口内人员选项）' },
   { code: 'thirdSales.reception.view', name: '查看三销接待列表', description: '允许查看三销接待列表' },
+  { code: 'thirdSales.orders.view', name: '查看三销业绩列表', description: '允许查看三销业绩列表与详情' },
   { code: 'thirdSales.create', name: '录入三销业绩' },
   { code: 'thirdSales.edit', name: '编辑三销业绩' },
   { code: 'thirdSales.time.edit', name: '修改三销录单时间', description: '允许修改三销业绩的业务录入时间' },
@@ -96,8 +93,7 @@ export const BUILT_IN_PERMISSION_DEFINITIONS: BuiltInPermissionDefinition[] = [
   { code: 'reports.secondSales.teamView', name: '查看二销业绩报表（团队）', description: '允许查看二销团队业绩报表' },
   { code: 'reports.thirdSales.view', name: '查看三销业绩报表（个人）', description: '允许查看三销个人业绩报表' },
   { code: 'reports.thirdSales.teamView', name: '查看三销业绩报表（团队）', description: '允许查看三销团队业绩报表' },
-  { code: 'legal.view', name: '查看法务系统' },
-  { code: 'legal.users.view', name: '查看法务模块用户选项', description: '允许查看法务模块中的用户下拉选项' },
+  { code: 'legal.view', name: '查看法务系统（含窗口内用户选项）' },
   { code: 'legal.edit', name: '法务进度维护' },
   { code: 'legal.assign', name: '法务岗位分派' },
   { code: 'legal.filing.review', name: '立案审核' },
@@ -112,9 +108,8 @@ export const BUILT_IN_PERMISSION_DEFINITIONS: BuiltInPermissionDefinition[] = [
   { code: 'oa.approvals.create', name: '提交OA审批' },
   { code: 'oa.approvals.review', name: '审批OA申请' },
   { code: 'oa.approvals.pay', name: '执行OA付款' },
-  { code: 'quality.view', name: '查看质检管理' },
+  { code: 'quality.view', name: '查看质检管理（含责任人选项）' },
   { code: 'quality.create', name: '新增质检记录' },
-  { code: 'quality.responsibles.view', name: '查看质检责任人选项', description: '允许查看质检模块中的责任人下拉选项' },
   { code: 'system.users.view', name: '查看用户' },
   { code: 'system.users.create', name: '新增用户' },
   { code: 'system.users.edit', name: '编辑用户' },
@@ -139,14 +134,12 @@ export const BUILT_IN_PERMISSION_DEFINITIONS: BuiltInPermissionDefinition[] = [
   { code: 'judicialComplaint.view', name: '查看司法投诉', description: '允许查看司法投诉列表与详情' },
   { code: 'judicialComplaint.create', name: '新建司法投诉', description: '允许提交司法投诉表单' },
   { code: 'judicialComplaint.edit', name: '处理司法投诉', description: '允许修改司法投诉处理状态与进度' },
-  { code: 'refund.view', name: '查看退款工单', description: '允许查看退款工单列表与详情' },
+  { code: 'refund.view', name: '查看退款工单（含处理人和一销部门选项）', description: '允许查看退款工单列表、详情及窗口内基础选项' },
   { code: 'refund.create', name: '发起退款申请', description: '允许创建退款工单' },
   { code: 'refund.review', name: '审批退款工单', description: '允许审批通过或驳回退款工单' },
   { code: 'refund.assign', name: '分配退款处理人', description: '允许将退款工单分配给售后处理人' },
   { code: 'refund.edit', name: '跟进退款工单', description: '允许记录退款处理跟进' },
   { code: 'refund.close', name: '完结退款工单', description: '允许关闭退款工单' },
-  { code: 'refund.users.view', name: '查看退款处理人员选项', description: '允许查看退款模块用户下拉选项' },
-  { code: 'refund.department.view', name: '查看退款一销部门选项', description: '允许查看退款模块中的一销部门选项' },
   { code: 'refund.department.edit', name: '修改退款一销归属', description: '允许修改退款单的一销团队与部门归属' },
   { code: 'refund.delete', name: '删除退款工单', description: '允许删除退款工单' },
 ]
@@ -161,7 +154,6 @@ const reportsPermissionCodes = [
 ]
 const firstSalesPermissionCodes = [
   'customers.view',
-  'customers.read.performanceForm',
   'customers.create',
   'customers.edit',
   'customers.follow',
@@ -177,50 +169,47 @@ const firstSalesPermissionCodes = [
   'firstSales.export',
   'contracts.view',
   'contracts.create',
-  'contracts.users.view',
-  'contracts.customers.view',
-  'contracts.orders.view',
 ]
 const secondSalesPermissionCodes = [
   'customers.view',
-  'customers.read.performanceForm',
   'customers.edit',
   'customers.follow',
   'customers.status',
   'customers.phone.unmask.self',
   'secondSales.view',
-  'secondSales.users.view',
   'secondSales.assignment.view',
+  'secondSales.orders.view',
   'secondSales.assign',
   'secondSales.transfer',
+  'secondSales.create',
   'secondSales.edit',
   'secondSales.time.edit',
   'secondSales.review.single',
   'secondSales.export',
+  'refund.create',
   'system.courtConfig.view',
 ]
 const thirdSalesPermissionCodes = [
   'customers.view',
-  'customers.read.performanceForm',
   'customers.phone.unmask.self',
   'thirdSales.view',
-  'thirdSales.users.view',
   'thirdSales.reception.view',
+  'thirdSales.orders.view',
   'thirdSales.create',
   'thirdSales.edit',
   'thirdSales.time.edit',
   'thirdSales.export',
+  'refund.create',
   'system.courtConfig.view',
 ]
-const legalPermissionCodes = ['legal.view', 'legal.users.view', 'legal.edit']
-const legalBaseTransferPermissionCodes = ['legal.transfer']
+const legalPermissionCodes = ['legal.view', 'legal.edit']
 const legalManagerExtraPermissionCodes = ['legal.assign', 'legal.filing.review', 'legal.pretrial.handle', 'legal.close', 'legal.transfer']
-const mediationPermissionCodes = ['mediation.view', 'mediation.complete', 'mediation.time.edit']
-const qualityPermissionCodes = ['quality.view', 'quality.create', 'quality.responsibles.view']
+const mediationPermissionCodes = ['mediation.view', 'mediation.complete', 'mediation.time.edit', 'refund.create']
+const qualityPermissionCodes = ['quality.view', 'quality.create']
 const oaPermissionCodes = ['oa.approvals.view', 'oa.approvals.create', 'oa.approvals.review', 'oa.approvals.pay']
-const contractPermissionCodes = ['contracts.view', 'contracts.create', 'contracts.users.view', 'contracts.customers.view', 'contracts.orders.view']
-const refundManagerPermissionCodes = ['refund.view', 'refund.create', 'refund.review', 'refund.assign', 'refund.edit', 'refund.close', 'refund.users.view', 'refund.department.view', 'refund.department.edit', 'refund.delete']
-const refundPermissionCodes = ['refund.view', 'refund.create', 'refund.edit', 'refund.close', 'refund.users.view', 'refund.department.view', 'refund.delete']
+const contractPermissionCodes = ['contracts.view', 'contracts.create']
+const refundManagerPermissionCodes = ['refund.view', 'refund.create', 'refund.review', 'refund.assign', 'refund.edit', 'refund.close', 'refund.department.edit', 'refund.delete', 'quality.view']
+const refundPermissionCodes = ['refund.view', 'refund.create', 'refund.edit', 'refund.close', 'refund.delete', 'quality.view']
 const managementPermissionCodes = [
   'dashboard.view',
   'system.users.view',
@@ -268,8 +257,6 @@ const managementPermissionCodes = [
   'refund.assign',
   'refund.edit',
   'refund.close',
-  'refund.users.view',
-  'refund.department.view',
   'refund.department.edit',
   'refund.delete',
 ]
@@ -511,7 +498,7 @@ export const BUILT_IN_ROLE_DEFINITIONS: BuiltInRoleDefinition[] = [
     customerScope: DataScope.DEPARTMENT,
     reportScope: DataScope.DEPARTMENT,
     userManageScope: DataScope.SELF,
-    permissionCodes: Array.from(new Set(['dashboard.view', 'customers.phone.unmask.self', ...legalPermissionCodes, ...legalBaseTransferPermissionCodes])),
+    permissionCodes: Array.from(new Set(['dashboard.view', 'customers.phone.unmask.self', ...legalPermissionCodes, 'legal.transfer'])),
   },
 ]
 

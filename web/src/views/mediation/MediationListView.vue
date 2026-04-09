@@ -30,8 +30,8 @@ const actionType = ref<MediationActionType>('FOLLOW')
 const editingCase = ref<MediationCaseItem | null>(null)
 const activeTab = ref<'pending' | 'processing' | 'completed'>('pending')
 const currentPage = ref(1)
-const pageSize = ref(10)
-const pageSizeOptions = [10, 20, 50, 100]
+const pageSize = ref(30)
+const pageSizeOptions = [30, 50, 100]
 const form = reactive<SaveMediationCasePayload>({
   customerId: 0,
   progressStatus: '',
@@ -158,6 +158,8 @@ const quickCreateRefund = async (item: MediationCaseItem) => {
     customerName: item.name,
     phone: item.phone,
     sourceStage: 'MEDIATION',
+    firstSalesUserId: item.firstSalesUserId,
+    firstSalesUserName: item.firstSalesUserName,
     reason: `客户在调解阶段申请退款，当前进度：${item.progressStatus}`,
     remark: item.remark || '',
   }

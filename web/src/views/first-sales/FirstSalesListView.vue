@@ -31,8 +31,8 @@ const screenshotPreviewVisible = ref(false)
 const screenshotPreviewUrl = ref('')
 const screenshotPreviewFailed = ref(false)
 const currentPage = ref(1)
-const pageSize = ref(10)
-const pageSizeOptions = [10, 20, 50, 100]
+const pageSize = ref(30)
+const pageSizeOptions = [30, 50, 100]
 const filters = ref({
   name: '',
   phone: '',
@@ -169,6 +169,9 @@ const quickCreateRefund = async (order: FirstSalesListItem) => {
     sourceStage: 'FIRST_SALES',
     relatedOrderId: order.id,
     relatedOrderStage: 'FIRST',
+    firstSalesUserId: order.salesUserId,
+    firstSalesUserName: order.salesUserName,
+    firstSalesDepartmentId: order.firstSalesDepartmentId,
     reason: `客户在一销阶段申请退款，当前状态：${order.currentStatus}`,
     remark: order.remark || '',
     expectedRefundAmount: Number(order.paymentAmount || 0),
@@ -300,6 +303,7 @@ const exportOrders = () => {
     客户姓名: item.name,
     手机号码: formatPhone(item.phone, item),
     一销团队: item.firstSalesTeamName || '',
+    一销部门: item.firstSalesDepartmentName || '',
     一销人员: item.salesUserName,
     成交类型: item.orderType,
     及时成交: item.isTimelyDeal ? '是' : '否',
@@ -457,9 +461,9 @@ onMounted(loadOrders)
                   {{ formatPhone(scope.row.phone, scope.row) }}
                 </template>
               </el-table-column>
-              <el-table-column label="一销团队" min-width="140">
+              <el-table-column label="一销团队/部门" min-width="200">
                 <template #default="scope">
-                  {{ scope.row.firstSalesTeamName || '-' }}
+                  {{ scope.row.firstSalesTeamName || '-' }} / {{ scope.row.firstSalesDepartmentName || '-' }}
                 </template>
               </el-table-column>
               <el-table-column label="成交类型" prop="orderType" min-width="100" />
