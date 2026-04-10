@@ -31,6 +31,11 @@ export class QueryCustomersDto {
   intentionLevel?: string
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  departmentId?: number
+
+  @IsOptional()
   @IsBooleanString()
   isTailPaymentCompleted?: string
 

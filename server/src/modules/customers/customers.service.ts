@@ -76,6 +76,13 @@ export class CustomersService {
             },
           }
         : {}),
+      ...(query.departmentId
+        ? {
+            firstSalesUser: {
+              departmentId: query.departmentId,
+            },
+          }
+        : {}),
       ...(query.isTailPaymentCompleted !== undefined
         ? {
             isTailPaymentCompleted: query.isTailPaymentCompleted === 'true',

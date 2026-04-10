@@ -3,10 +3,11 @@ import { Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onActivated, onMounted, reactive, ref, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { hasPermission, formatPhone } from '../../utils/permissions'
+import { fetchDepartmentTree } from '../../api/departments'
 import { fetchCustomers } from '../../api/customers'
 import { deleteCustomer } from '../../api/customers'
-import type { CustomerFilters, CustomerItem } from '../../types'
+import type { CustomerFilters, CustomerItem, DepartmentTreeItem } from '../../types'
+import { hasPermission, formatPhone } from '../../utils/permissions'
 import CustomerDetailDrawer from './CustomerDetailDrawer.vue'
 import CustomerTailPaymentDrawer from './CustomerTailPaymentDrawer.vue'
 import RefundCreateDialog from '../refund/RefundCreateDialog.vue'
@@ -22,6 +23,7 @@ const loading = ref(false)
 const customers = ref<CustomerItem[]>([])
 const total = ref(0)
 const loadError = ref('')
+const departmentOptions = ref<Array<{ id: number; name: string }>>([])
 const drawerVisible = ref(false)
 const filterDrawerVisible = ref(false)
 const tailPaymentDrawerVisible = ref(false)
@@ -39,6 +41,7 @@ const filters = reactive<CustomerFilters>({
   source: '',
   caseType: '',
   intentionLevel: '',
+  departmentId: '',
   isTailPaymentCompleted: '',
   hasApprovalRecord: '',
   hasQualityRecord: '',
@@ -66,6 +69,31 @@ const booleanOptions = [
   { label: '是', value: 'true' },
   { label: '否', value: 'false' },
 ]
+
+const flattenDepartments = (items: DepartmentTreeItem[], prefix = ''): Array<{ id: number; name: string }> =>
+  items.flatMap((item) => {
+    const label = prefix ? `${prefix} / ${item.name}` : item.name
+    return [{ id: item.id, name: label }, ...flattenDepartments(item.children || [], label)]
+  })
+
+const findDepartmentNodeByName = (items: DepartmentTreeItem[], name: string): DepartmentTreeItem | null => {
+  for (const item of items) {
+    if (item.name === name) {
+      return item
+    }
+    const matchedChild = findDepartmentNodeByName(item.children || [], name)
+    if (matchedChild) {
+      return matchedChild
+    }
+  }
+  return null
+}
+
+const loadDepartmentOptions = async () => {
+  const departmentTree = await fetchDepartmentTree()
+  const firstSalesTeamNode = findDepartmentNodeByName(departmentTree, '一销团队')
+  departmentOptions.value = firstSalesTeamNode ? flattenDepartments(firstSalesTeamNode.children || []) : []
+}
 
 const formatDateTime = (value?: string) => value?.replace('T', ' ').slice(0, 19) || '-'
 
@@ -168,6 +196,7 @@ const resetFilters = async () => {
   filters.source = ''
   filters.caseType = ''
   filters.intentionLevel = ''
+  filters.departmentId = ''
   filters.isTailPaymentCompleted = ''
   filters.hasApprovalRecord = ''
   filters.hasQualityRecord = ''
@@ -246,6 +275,7 @@ watch(currentPage, async () => {
 })
 
 onMounted(async () => {
+  await loadDepartmentOptions()
   const refreshed = await consumePendingCustomerRefresh()
   if (!refreshed && !route.query.phone) {
     await loadCustomers()
@@ -430,6 +460,11 @@ onActivated(async () => {
             </el-form-item>
             <el-form-item label="意向等级">
               <el-input v-model="filters.intentionLevel" placeholder="请输入意向等级" clearable />
+            </el-form-item>
+            <el-form-item label="所属部门">
+              <el-select v-model="filters.departmentId" placeholder="请选择部门" clearable filterable>
+                <el-option v-for="item in departmentOptions" :key="item.id" :label="item.name" :value="String(item.id)" />
+              </el-select>
             </el-form-item>
             <el-form-item label="当前状态">
               <el-select v-model="filters.status" placeholder="请选择状态" clearable>

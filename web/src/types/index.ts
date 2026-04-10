@@ -81,6 +81,7 @@ export interface CustomerFilters {
   source?: string
   caseType?: string
   intentionLevel?: string
+  departmentId?: string
   isTailPaymentCompleted?: string
   hasApprovalRecord?: string
   hasQualityRecord?: string
