@@ -266,7 +266,7 @@ export class ThirdSalesService {
     const orderType = this.resolveOrderType(dto.orderType)
     const paymentStatus = this.resolvePaymentStatus(dto.orderType, arrearsAmount)
     const rawPerformanceAmount = paymentAmount
-    const hearingCostAmount = await this.courtConfigService.getHearingCost()
+    const hearingCostAmount = dto.orderType === 'FULL' || dto.orderType === 'TAIL' ? await this.courtConfigService.getHearingCost() : 0
     const performanceAmount = Math.max(rawPerformanceAmount - hearingCostAmount, 0)
     const paymentAccount = await this.paymentAccountsService.ensureAvailable(dto.paymentAccountId)
     await this.ensurePaymentSerialNoUnique(dto.paymentSerialNo)
@@ -383,7 +383,7 @@ export class ThirdSalesService {
     const orderType = this.resolveOrderType(dto.orderType)
     const paymentStatus = this.resolvePaymentStatus(dto.orderType, arrearsAmount)
     const rawPerformanceAmount = paymentAmount
-    const hearingCostAmount = await this.courtConfigService.getHearingCost()
+    const hearingCostAmount = dto.orderType === 'FULL' || dto.orderType === 'TAIL' ? await this.courtConfigService.getHearingCost() : 0
     const performanceAmount = Math.max(rawPerformanceAmount - hearingCostAmount, 0)
     const paymentAccount = await this.paymentAccountsService.ensureAvailable(dto.paymentAccountId)
     await this.ensurePaymentSerialNoUnique(dto.paymentSerialNo, { stage: 'THIRD', id })

@@ -131,7 +131,7 @@ const openEditDrawer = async (order: ThirdSalesOrderListItem) => {
   await orderDrawerRef.value?.openForEdit(order)
 }
 
-const canRecordTailPayment = (order: ThirdSalesOrderListItem) => order.paymentStatus !== '已付清' && order.orderType !== '尾款'
+const canRecordTailPayment = (order: ThirdSalesOrderListItem) => order.paymentStatus !== '已付清' && order.orderType === '定金'
 
 const openTailPaymentDrawer = async (order: ThirdSalesOrderListItem) => {
   const payload: ThirdSalesOrderPayload = {

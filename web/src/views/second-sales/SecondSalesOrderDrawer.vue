@@ -247,6 +247,7 @@ const openForTailPayment = async (order: SecondSalesOrderListItem, payload: Seco
   form.orderType = payload.orderType
   form.contractAmount = payload.contractAmount
   form.secondPaymentAmount = payload.secondPaymentAmount
+  form.includesHearing = order.includesHearing
   paymentAmountText.value = String(payload.secondPaymentAmount || 0)
   form.paymentSerialNo = payload.paymentSerialNo
   form.nextStage = payload.nextStage
