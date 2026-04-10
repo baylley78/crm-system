@@ -165,12 +165,14 @@ const mapOrderToCustomer = (order: FirstSalesListItem): CustomerItem => ({
   totalPaymentAmount: order.paymentAmount,
   arrearsAmount: order.arrearsAmount,
   isTailPaymentCompleted: order.paymentStatus === '已付清',
+  isTimelyDeal: order.isTimelyDeal,
   createdAt: order.createdAt,
   updatedAt: order.createdAt,
 })
 
 const canRecordTailPayment = (order: FirstSalesListItem) => order.paymentStatus !== '已付清' && order.currentStatus === '待补尾款'
-const canTransferToSecondSales = (order: FirstSalesListItem) => order.currentStatus === '待分配二销'
+const canTransferToSecondSales = (order: FirstSalesListItem) =>
+  order.currentStatus === '待分配二销' && (order.orderType === '尾款' || order.orderType === '全款')
 
 const openTailPayment = async (order: FirstSalesListItem) => {
   tailPaymentDrawerVisible.value = true
@@ -554,16 +556,16 @@ onMounted(loadOrders)
               <el-table-column label="一销人员" prop="salesUserName" min-width="120" />
               <el-table-column label="客户情况说明" prop="remark" min-width="180" show-overflow-tooltip />
               <el-table-column label="客户编号" prop="customerNo" min-width="140" />
-              <el-table-column label="操作" fixed="right" width="210">
+              <el-table-column label="操作" fixed="right" width="280">
                 <template #default="scope">
-                  <div class="action-cell">
+                  <div class="action-cell compact-action-cell">
                     <el-button v-if="canEditFirstSales()" link type="primary" @click="openEditDrawer(scope.row)">编辑</el-button>
                     <el-button v-if="canTailFirstSales() && canRecordTailPayment(scope.row)" link type="warning" @click="openTailPayment(scope.row)">补录尾款</el-button>
                     <el-button v-if="canCreateRefund()" link type="danger" :loading="refundSubmittingId === scope.row.id" @click="quickCreateRefund(scope.row)">申请退款</el-button>
                     <el-button v-if="canTransferToSecondSales(scope.row)" link type="primary" @click="handleTransferToSecondSales">转入二销</el-button>
-                    <el-button v-if="canDeleteFirstSales()" link type="danger" circle class="delete-icon-button" @click="handleDeleteOrder(scope.row)">
-                      <el-icon><Delete /></el-icon>
-                    </el-button>
+                    <el-tooltip v-if="canDeleteFirstSales()" content="删除一销业绩" placement="top">
+                      <el-button link type="danger" :icon="Delete" @click="handleDeleteOrder(scope.row)" />
+                    </el-tooltip>
                   </div>
                 </template>
               </el-table-column>
@@ -618,11 +620,13 @@ onMounted(loadOrders)
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
+  flex-wrap: wrap;
 }
 
-.action-cell :deep(.el-button) {
+.compact-action-cell :deep(.el-button) {
   padding: 2px 4px;
   font-size: 12px;
+  margin-left: 0;
 }
 
 .table-pagination {

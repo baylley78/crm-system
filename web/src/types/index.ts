@@ -60,6 +60,7 @@ export interface CustomerItem {
   totalPaymentAmount: number
   arrearsAmount: number
   isTailPaymentCompleted?: boolean
+  isTimelyDeal?: boolean
   latestFollowOperatorName?: string
   latestFollowContent?: string
   latestFollowTime?: string

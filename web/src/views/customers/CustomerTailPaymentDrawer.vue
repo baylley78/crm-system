@@ -61,6 +61,7 @@ const resetForm = () => {
   chatRecordPreviewUrl.value = ''
   if (currentCustomer.value) {
     form.targetAmount = Number(currentCustomer.value.arrearsAmount || 0)
+    form.isTimelyDeal = currentCustomer.value.isTimelyDeal ? 'true' : 'false'
     syncAmounts()
   }
   assignDefaultSalesUser()
