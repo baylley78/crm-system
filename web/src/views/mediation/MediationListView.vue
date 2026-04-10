@@ -292,7 +292,7 @@ onMounted(async () => {
             <el-table-column label="操作" min-width="220" fixed="right">
               <template #default="scope">
                 <div class="action-cell compact-action-cell">
-                  <el-button v-if="canEditMediation()" type="primary" link @click.stop="openActionDialog(scope.row, 'FOLLOW')">跟进</el-button>
+                  <el-button v-if="canEditMediation()" type="primary" link @click.stop="openActionDialog(scope.row, 'FOLLOW')">{{ canPendingStatus(scope.row.currentStatus) ? '分配跟进' : '跟进' }}</el-button>
                   <el-button v-if="canCompleteMediation()" type="success" link :disabled="scope.row.isCompleted" @click.stop="openActionDialog(scope.row, 'COMPLETE')">完结</el-button>
                   <el-button v-if="canCreateRefund()" type="danger" link :loading="refundingId === scope.row.customerId" @click.stop="quickCreateRefund(scope.row)">申请退款</el-button>
                   <el-tooltip v-if="canDeleteCustomers()" content="删除客户" placement="top">
@@ -402,7 +402,7 @@ onMounted(async () => {
 
     <el-dialog
       v-model="actionDialogVisible"
-      :title="actionType === 'COMPLETE' ? '完结调解' : '调解跟进'"
+      :title="actionType === 'COMPLETE' ? '完结调解' : canPendingStatus(editingCase?.currentStatus || '') ? '分配调解人员并跟进' : '调解跟进'"
       width="720px"
       @closed="handleDialogClosed"
     >
@@ -418,6 +418,7 @@ onMounted(async () => {
             <el-select v-model="form.ownerId" clearable filterable placeholder="请选择调解专员" style="width: 100%">
               <el-option v-for="user in users" :key="user.id" :label="`${user.realName}（${user.roleName}）`" :value="user.id" />
             </el-select>
+            <div class="field-tip">待转调解客户可在这里直接分配到对应调解人员名下。</div>
           </el-form-item>
           <el-form-item label="调解进度">
             <el-input v-model="form.progressStatus" placeholder="请输入调解进度" />
@@ -535,6 +536,12 @@ onMounted(async () => {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
+}
+
+.field-tip {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.4;
 }
 
 .static-text {
