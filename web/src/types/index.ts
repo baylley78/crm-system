@@ -558,6 +558,11 @@ export interface MediationCaseItem {
   evidenceFileUrls: string[]
   startDate?: string
   isCompleted: boolean
+  customerRemark?: string
+  firstSalesRemark?: string
+  firstSalesPaymentScreenshotUrl?: string
+  firstSalesChatRecordUrl?: string
+  firstSalesEvidenceFileUrls: string[]
 }
 
 export interface SaveMediationCasePayload {
@@ -568,6 +573,7 @@ export interface SaveMediationCasePayload {
   evidenceFiles?: File[]
   startDate?: string
   isCompleted?: boolean
+  ownerId?: number
 }
 
 export interface TransferToMediationPayload {
@@ -595,7 +601,19 @@ export interface LegalCaseItem {
   customerSituationRemark?: string
   firstSalesRemark?: string
   secondSalesRemark?: string
+  thirdSalesRemark?: string
   upstreamEvidenceFileUrls: string[]
+  firstSalesEvidenceFileUrls: string[]
+  secondSalesEvidenceFileUrls: string[]
+  thirdSalesEvidenceFileUrls: string[]
+  secondSalesPaymentScreenshotUrl?: string
+  thirdSalesPaymentScreenshotUrl?: string
+  secondSalesChatRecordUrl?: string
+  thirdSalesChatRecordUrl?: string
+  secondSalesPaymentStatus?: string
+  thirdSalesPaymentStatus?: string
+  secondSalesPaymentAmount?: number
+  thirdSalesPaymentAmount?: number
   startDate?: string
   isCompleted: boolean
   filingApproved: boolean

@@ -29,4 +29,9 @@ export class SaveMediationCaseDto {
   @IsOptional()
   @IsBoolean()
   isCompleted?: boolean
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  ownerId?: number
 }

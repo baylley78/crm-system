@@ -43,15 +43,17 @@ const isAssignedStatus = (status: string) =>
   status === 'MEDIATION_COMPLETED' ||
   status === '待转三销' ||
   status === 'PENDING_THIRD_SALES'
-const canSubmitSecondSales = (status: string) =>
-  status === '二销跟进中' ||
-  status === 'SECOND_SALES_FOLLOWING' ||
-  status === '待转调解' ||
-  status === 'PENDING_MEDIATION' ||
-  status === '调解处理中' ||
-  status === 'MEDIATION_PROCESSING' ||
-  status === '调解完成' ||
-  status === 'MEDIATION_COMPLETED'
+const canSubmitSecondSales = (customer: SecondSalesAssignmentItem) => {
+  if (customer.currentStatus === '待转法务' || customer.currentStatus === 'PENDING_LEGAL') {
+    return false
+  }
+
+  if (customer.arrearsAmount > 0) {
+    return true
+  }
+
+  return customer.currentStatus === '二销跟进中' || customer.currentStatus === 'SECOND_SALES_FOLLOWING'
+}
 const canTransferToMediation = (status: string) => status === '二销跟进中' || status === 'SECOND_SALES_FOLLOWING'
 const formatStatus = (status: string) => {
   if (isPendingStatus(status)) {
@@ -234,7 +236,7 @@ onMounted(loadData)
             <div class="action-buttons-wrap">
               <el-button v-if="canAssignSecondSales() && activeTab === 'pending'" type="primary" link size="small" @click="openAssignDialog(scope.row)">分配二销</el-button>
               <el-button v-if="canAssignSecondSales() && activeTab !== 'pending'" type="primary" link size="small" @click="openAssignDialog(scope.row)">重分配</el-button>
-              <el-button v-if="canCreateSecondSales()" type="success" link size="small" :disabled="!canSubmitSecondSales(scope.row.currentStatus)" @click="openOrderDrawer(scope.row)">录业绩</el-button>
+              <el-button v-if="canCreateSecondSales()" type="success" link size="small" :disabled="!canSubmitSecondSales(scope.row)" @click="openOrderDrawer(scope.row)">{{ scope.row.arrearsAmount > 0 ? '补尾款' : '录业绩' }}</el-button>
               <el-button v-if="canCreateRefund()" type="danger" link size="small" :loading="refundingId === scope.row.id" @click="quickCreateRefund(scope.row)">退款</el-button>
               <el-button v-if="canTransferSecondSales()" type="warning" link size="small" :disabled="!canTransferToMediation(scope.row.currentStatus)" @click="transferCustomerToMediation(scope.row)">转调解</el-button>
             </div>

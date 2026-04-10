@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Delete } from '@element-plus/icons-vue'
+import { Delete, Document } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref, watch, computed } from 'vue'
+import { getFileName, isImageFile, toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
 import { hasPermission, formatPhone } from '../../utils/permissions'
 import { completeMediationCase, fetchMediationCases, fetchMediationUsers, followMediationCase } from '../../api/mediation'
 import { deleteCustomer } from '../../api/customers'
@@ -57,6 +58,17 @@ const syncActiveCase = (caseList: MediationCaseItem[]) => {
   }
 
   activeCase.value = caseList[0] || null
+}
+
+const canPreviewAttachment = (url?: string) => Boolean(toAbsoluteFileUrl(url))
+
+const openAttachment = (url?: string) => {
+  const absoluteUrl = toAbsoluteFileUrl(url)
+  if (!absoluteUrl) {
+    ElMessage.warning('附件地址无效')
+    return
+  }
+  window.open(absoluteUrl, '_blank', 'noopener')
 }
 
 const loadData = async () => {
@@ -123,6 +135,7 @@ const resetForm = () => {
   form.evidenceFiles = []
   form.startDate = ''
   form.isCompleted = false
+  form.ownerId = undefined
 }
 
 const fillForm = (item: MediationCaseItem, type: MediationActionType) => {
@@ -133,6 +146,7 @@ const fillForm = (item: MediationCaseItem, type: MediationActionType) => {
   form.evidenceFiles = []
   form.startDate = item.startDate ? item.startDate.slice(0, 16) : ''
   form.isCompleted = type === 'COMPLETE'
+  form.ownerId = item.ownerId
 }
 
 const selectCase = (item: MediationCaseItem | null) => {
@@ -277,14 +291,14 @@ onMounted(async () => {
             </el-table-column>
             <el-table-column label="操作" min-width="220" fixed="right">
               <template #default="scope">
-                <el-space wrap>
+                <div class="action-cell compact-action-cell">
                   <el-button v-if="canEditMediation()" type="primary" link @click.stop="openActionDialog(scope.row, 'FOLLOW')">跟进</el-button>
                   <el-button v-if="canCompleteMediation()" type="success" link :disabled="scope.row.isCompleted" @click.stop="openActionDialog(scope.row, 'COMPLETE')">完结</el-button>
                   <el-button v-if="canCreateRefund()" type="danger" link :loading="refundingId === scope.row.customerId" @click.stop="quickCreateRefund(scope.row)">申请退款</el-button>
                   <el-tooltip v-if="canDeleteCustomers()" content="删除客户" placement="top">
                     <el-button link type="danger" :icon="Delete" @click.stop="handleDeleteCustomer(scope.row)" />
                   </el-tooltip>
-                </el-space>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -302,20 +316,86 @@ onMounted(async () => {
 
         <el-card shadow="never">
           <template #header>客户接待信息</template>
-          <el-descriptions :column="4" border>
-            <el-descriptions-item label="客户编号">{{ activeCase?.customerNo || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="客户姓名">{{ activeCase?.name || '请选择案件' }}</el-descriptions-item>
-            <el-descriptions-item label="手机号码">{{ formatPhone(activeCase?.phone, activeCase || undefined) }}</el-descriptions-item>
-            <el-descriptions-item label="当前状态">{{ activeCase ? formatStatus(activeCase.currentStatus) : '-' }}</el-descriptions-item>
-            <el-descriptions-item label="一销人员">{{ activeCase?.firstSalesUserName || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="二销人员">{{ activeCase?.secondSalesUserName || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="客户来源">{{ activeCase?.source || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="意向等级">{{ activeCase?.intentionLevel || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="案件类型">{{ activeCase?.caseType || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="一销付款">{{ activeCase?.firstPaymentAmount || 0 }}</el-descriptions-item>
-            <el-descriptions-item label="二销付款">{{ activeCase?.secondPaymentAmount || 0 }}</el-descriptions-item>
-            <el-descriptions-item label="欠款金额">{{ activeCase?.arrearsAmount || 0 }}</el-descriptions-item>
-          </el-descriptions>
+          <div class="page-stack-sm">
+            <el-descriptions :column="4" border>
+              <el-descriptions-item label="客户编号">{{ activeCase?.customerNo || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="客户姓名">{{ activeCase?.name || '请选择案件' }}</el-descriptions-item>
+              <el-descriptions-item label="手机号码">{{ formatPhone(activeCase?.phone, activeCase || undefined) }}</el-descriptions-item>
+              <el-descriptions-item label="当前状态">{{ activeCase ? formatStatus(activeCase.currentStatus) : '-' }}</el-descriptions-item>
+              <el-descriptions-item label="一销人员">{{ activeCase?.firstSalesUserName || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="二销人员">{{ activeCase?.secondSalesUserName || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="客户来源">{{ activeCase?.source || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="意向等级">{{ activeCase?.intentionLevel || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="案件类型">{{ activeCase?.caseType || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="一销付款">{{ activeCase?.firstPaymentAmount || 0 }}</el-descriptions-item>
+              <el-descriptions-item label="二销付款">{{ activeCase?.secondPaymentAmount || 0 }}</el-descriptions-item>
+              <el-descriptions-item label="欠款金额">{{ activeCase?.arrearsAmount || 0 }}</el-descriptions-item>
+            </el-descriptions>
+
+            <el-card shadow="never">
+              <template #header>一销销售信息</template>
+              <template v-if="activeCase">
+                <div class="page-stack-sm">
+                  <el-descriptions :column="1" border>
+                    <el-descriptions-item label="客户备注">{{ activeCase.customerRemark || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="一销备注">{{ activeCase.firstSalesRemark || '-' }}</el-descriptions-item>
+                  </el-descriptions>
+
+                  <div class="attachment-section">
+                    <div class="attachment-section-title">付款截图</div>
+                    <div v-if="canPreviewAttachment(activeCase.firstSalesPaymentScreenshotUrl)" class="attachment-grid">
+                      <img
+                        :src="toAbsoluteFileUrl(activeCase.firstSalesPaymentScreenshotUrl)"
+                        alt="一销付款截图"
+                        class="attachment-thumbnail"
+                        @click="openAttachment(activeCase.firstSalesPaymentScreenshotUrl)"
+                      />
+                    </div>
+                    <el-empty v-else description="暂无付款截图" />
+                  </div>
+
+                  <div class="attachment-section">
+                    <div class="attachment-section-title">聊天记录</div>
+                    <div v-if="canPreviewAttachment(activeCase.firstSalesChatRecordUrl)" class="attachment-grid">
+                      <img
+                        v-if="isImageFile(activeCase.firstSalesChatRecordUrl)"
+                        :src="toAbsoluteFileUrl(activeCase.firstSalesChatRecordUrl)"
+                        alt="一销聊天记录"
+                        class="attachment-thumbnail"
+                        @click="openAttachment(activeCase.firstSalesChatRecordUrl)"
+                      />
+                      <el-button v-else text class="file-chip" @click="openAttachment(activeCase.firstSalesChatRecordUrl)">
+                        <el-icon><Document /></el-icon>
+                        <span>{{ getFileName(activeCase.firstSalesChatRecordUrl) }}</span>
+                      </el-button>
+                    </div>
+                    <el-empty v-else description="暂无聊天记录" />
+                  </div>
+
+                  <div class="attachment-section">
+                    <div class="attachment-section-title">证据材料</div>
+                    <div v-if="activeCase.firstSalesEvidenceFileUrls.length" class="attachment-grid">
+                      <template v-for="(item, index) in activeCase.firstSalesEvidenceFileUrls" :key="item + '-' + index">
+                        <img
+                          v-if="isImageFile(item)"
+                          :src="toAbsoluteFileUrl(item)"
+                          :alt="`一销证据${index + 1}`"
+                          class="attachment-thumbnail"
+                          @click="openAttachment(item)"
+                        />
+                        <el-button v-else text class="file-chip" @click="openAttachment(item)">
+                          <el-icon><Document /></el-icon>
+                          <span>{{ getFileName(item) }}</span>
+                        </el-button>
+                      </template>
+                    </div>
+                    <el-empty v-else description="暂无证据材料" />
+                  </div>
+                </div>
+              </template>
+              <el-empty v-else description="请选择案件" />
+            </el-card>
+          </div>
         </el-card>
       </div>
     </el-card>
@@ -334,8 +414,10 @@ onMounted(async () => {
           <el-form-item label="当前状态">
             <div class="static-text">{{ editingCase ? formatStatus(editingCase.currentStatus) : '-' }}</div>
           </el-form-item>
-          <el-form-item label="当前负责人">
-            <div class="static-text">{{ editingCase?.ownerName || '-' }}</div>
+          <el-form-item label="调解负责人">
+            <el-select v-model="form.ownerId" clearable filterable placeholder="请选择调解专员" style="width: 100%">
+              <el-option v-for="user in users" :key="user.id" :label="`${user.realName}（${user.roleName}）`" :value="user.id" />
+            </el-select>
           </el-form-item>
           <el-form-item label="调解进度">
             <el-input v-model="form.progressStatus" placeholder="请输入调解进度" />
@@ -373,6 +455,18 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.action-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.compact-action-cell :deep(.el-button) {
+  padding: 2px 4px;
+  font-size: 12px;
+}
+
 .table-pagination {
   display: flex;
   justify-content: flex-end;
@@ -395,6 +489,41 @@ onMounted(async () => {
 
 :deep(.row-pending-mediation:hover > td.el-table__cell) {
   background-color: #ffefcc !important;
+}
+
+.attachment-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attachment-section-title {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.attachment-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.attachment-thumbnail {
+  width: 88px;
+  height: 88px;
+  border-radius: 8px;
+  object-fit: cover;
+  cursor: pointer;
+  border: 1px solid var(--el-border-color-light);
+}
+
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 8px;
 }
 
 .full-width {

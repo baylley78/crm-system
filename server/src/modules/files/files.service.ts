@@ -46,8 +46,14 @@ export class FilesService {
 
     const storedPath = `/uploads/${filename}`
     const customerId = await this.findCustomerIdByFile(storedPath)
-    if (!customerId) {
+    const absolutePath = join(process.cwd(), 'uploads', filename)
+
+    if (!existsSync(absolutePath)) {
       throw new NotFoundException('文件不存在')
+    }
+
+    if (!customerId) {
+      return { absolutePath }
     }
 
     const customer = await this.prisma.customer.findFirst({
@@ -60,11 +66,6 @@ export class FilesService {
 
     if (!customer) {
       throw new ForbiddenException('无权访问该文件')
-    }
-
-    const absolutePath = join(process.cwd(), 'uploads', filename)
-    if (!existsSync(absolutePath)) {
-      throw new NotFoundException('文件不存在')
     }
 
     return { absolutePath }

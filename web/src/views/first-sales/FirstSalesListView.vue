@@ -483,7 +483,11 @@ onMounted(loadOrders)
             </el-space>
             <el-table ref="orderTableRef" v-loading="loading" :data="paginatedOrders" :row-class-name="getRowClassName" @selection-change="handleSelectionChange">
               <el-table-column type="selection" width="55" />
-              <el-table-column label="客户编号" prop="customerNo" min-width="140" />
+              <el-table-column label="录单时间" min-width="180">
+                <template #default="scope">
+                  {{ formatDateTime(scope.row.createdAt) }}
+                </template>
+              </el-table-column>
               <el-table-column label="客户姓名" prop="name" min-width="120" />
               <el-table-column label="手机号码" min-width="130">
                 <template #default="scope">
@@ -549,11 +553,7 @@ onMounted(loadOrders)
               </el-table-column>
               <el-table-column label="一销人员" prop="salesUserName" min-width="120" />
               <el-table-column label="客户情况说明" prop="remark" min-width="180" show-overflow-tooltip />
-              <el-table-column label="录入时间" min-width="180">
-                <template #default="scope">
-                  {{ formatDateTime(scope.row.createdAt) }}
-                </template>
-              </el-table-column>
+              <el-table-column label="客户编号" prop="customerNo" min-width="140" />
               <el-table-column label="操作" fixed="right" width="210">
                 <template #default="scope">
                   <div class="action-cell">
@@ -618,6 +618,11 @@ onMounted(loadOrders)
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
+}
+
+.action-cell :deep(.el-button) {
+  padding: 2px 4px;
+  font-size: 12px;
 }
 
 .table-pagination {

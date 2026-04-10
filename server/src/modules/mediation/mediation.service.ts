@@ -41,6 +41,16 @@ export class MediationService {
             orderBy: { createdAt: 'desc' },
             take: 1,
           },
+          firstSalesOrders: {
+            select: {
+              remark: true,
+              paymentScreenshotUrl: true,
+              evidenceImageUrls: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
         },
         orderBy: { updatedAt: 'desc' },
         skip,
@@ -52,6 +62,11 @@ export class MediationService {
     return {
       items: customers.map((customer) => {
         const latestCase = customer.mediationCases[0]
+        const latestFirstSalesOrder = customer.firstSalesOrders[0]
+        const firstSalesEvidenceFileUrls = latestFirstSalesOrder
+          ? this.buildFirstSalesEvidence(customer.firstSalesChatRecordUrl, latestFirstSalesOrder.paymentScreenshotUrl, latestFirstSalesOrder.evidenceImageUrls)
+          : []
+
         return {
           customerId: customer.id,
           customerNo: customer.customerNo,
@@ -77,7 +92,13 @@ export class MediationService {
           mediationResult: latestCase?.mediationResult ?? '',
           remark: latestCase?.remark ?? customer.remark ?? '',
           evidenceFileUrls: this.filesService.toAccessUrls(this.filesService.parseJsonFileUrls(latestCase?.evidenceFileUrls)),
+          startDate: latestCase?.startDate?.toISOString(),
           isCompleted: customer.currentStatus === CustomerStatus.MEDIATION_COMPLETED,
+          customerRemark: customer.remark ?? '',
+          firstSalesRemark: latestFirstSalesOrder?.remark ?? customer.remark ?? '',
+          firstSalesPaymentScreenshotUrl: this.filesService.toAccessUrl(latestFirstSalesOrder?.paymentScreenshotUrl),
+          firstSalesChatRecordUrl: this.filesService.toAccessUrl(customer.firstSalesChatRecordUrl),
+          firstSalesEvidenceFileUrls,
         }
       }),
       total,
@@ -117,8 +138,9 @@ export class MediationService {
       throw new NotFoundException('客户不存在')
     }
 
-    const owner = await this.prisma.user.findUnique({ where: { id: currentUser.id } })
-    if (!owner) {
+    const assigneeId = dto.ownerId ?? customer.currentOwnerId ?? customer.mediationCases[0]?.ownerId ?? currentUser.id
+    const owner = await this.prisma.user.findUnique({ where: { id: assigneeId }, include: { role: true } })
+    if (!owner || !MEDIATION_ROLE_CODES.includes(owner.role.code)) {
       throw new NotFoundException('调解负责人不存在')
     }
 
@@ -128,14 +150,14 @@ export class MediationService {
 
     const latestCase = customer.mediationCases[0]
     const startDate = this.resolveStartDate(currentUser, dto.startDate, latestCase?.startDate)
-    const followContent = this.buildFollowContent(dto)
+    const followContent = this.buildFollowContent(dto, owner.realName)
 
     await this.prisma.$transaction(async (tx) => {
       if (latestCase) {
         await tx.mediationCase.update({
           where: { id: latestCase.id },
           data: {
-            ownerId: currentUser.id,
+            ownerId: owner.id,
             progressStatus: dto.progressStatus,
             mediationResult: dto.mediationResult,
             remark: dto.remark,
@@ -148,7 +170,7 @@ export class MediationService {
         await tx.mediationCase.create({
           data: {
             customerId: dto.customerId,
-            ownerId: currentUser.id,
+            ownerId: owner.id,
             progressStatus: dto.progressStatus,
             mediationResult: dto.mediationResult,
             remark: dto.remark,
@@ -171,7 +193,7 @@ export class MediationService {
       await tx.customer.update({
         where: { id: dto.customerId },
         data: {
-          currentOwnerId: currentUser.id,
+          currentOwnerId: owner.id,
           currentStatus: dto.isCompleted ? CustomerStatus.MEDIATION_COMPLETED : CustomerStatus.MEDIATION_PROCESSING,
         },
       })
@@ -197,9 +219,28 @@ export class MediationService {
     return parsed
   }
 
-  private buildFollowContent(dto: SaveMediationCaseDto) {
+  private buildFirstSalesEvidence(chatRecordUrl?: string | null, paymentScreenshotUrl?: string | null, evidenceImageUrls?: string | null) {
+    const result: string[] = []
+    const paymentScreenshotAccessUrl = this.filesService.toAccessUrl(paymentScreenshotUrl)
+    if (paymentScreenshotAccessUrl) {
+      result.push(paymentScreenshotAccessUrl)
+    }
+
+    const chatRecordAccessUrl = this.filesService.toAccessUrl(chatRecordUrl)
+    if (chatRecordAccessUrl) {
+      result.push(chatRecordAccessUrl)
+    }
+
+    return [
+      ...result,
+      ...this.filesService.toAccessUrls(this.filesService.parseJsonFileUrls(evidenceImageUrls)),
+    ]
+  }
+
+  private buildFollowContent(dto: SaveMediationCaseDto, ownerName?: string) {
     const parts = [
       dto.isCompleted ? '调解完结' : '调解跟进',
+      ownerName ? `负责人：${ownerName}` : '',
       dto.progressStatus?.trim() ? `进度：${dto.progressStatus.trim()}` : '',
       dto.mediationResult?.trim() ? `结果：${dto.mediationResult.trim()}` : '',
       dto.remark?.trim() ? `备注：${dto.remark.trim()}` : '',

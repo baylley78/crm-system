@@ -23,10 +23,12 @@ const currentCustomer = ref<ThirdSalesCustomerSearchResult | null>(null)
 const editingOrder = ref<ThirdSalesOrderListItem | null>(null)
 const evidenceFileList = ref<UploadFile[]>([])
 const paymentScreenshotList = ref<UploadFile[]>([])
+const chatRecordFileList = ref<UploadFile[]>([])
 const paymentScreenshotPreviewUrl = ref('')
+const chatRecordPreviewUrl = ref('')
 const hearingCost = ref(0)
 
-  const initialForm = (): ThirdSalesOrderPayload => ({
+const initialForm = (): ThirdSalesOrderPayload => ({
   phone: '',
   thirdSalesUserId: 0,
   orderType: 'FULL',
@@ -43,6 +45,7 @@ const hearingCost = ref(0)
   intentionLevel: '',
   remark: '',
   evidenceFiles: [],
+  chatRecordFile: null,
 })
 
 const form = reactive<ThirdSalesOrderPayload>(initialForm())
@@ -79,7 +82,9 @@ const resetForm = () => {
   Object.assign(form, initialForm())
   evidenceFileList.value = []
   paymentScreenshotList.value = []
+  chatRecordFileList.value = []
   paymentScreenshotPreviewUrl.value = ''
+  chatRecordPreviewUrl.value = ''
   if (currentCustomer.value?.phone) {
     form.phone = currentCustomer.value.phone
     form.customerName = currentCustomer.value.name
@@ -121,13 +126,23 @@ const fillFormForEdit = (order: ThirdSalesOrderListItem) => {
   form.source = ''
   form.intentionLevel = ''
   form.remark = order.remark || ''
+  form.chatRecordFile = null
   form.evidenceFiles = []
   paymentScreenshotPreviewUrl.value = order.paymentScreenshotUrl || ''
+  chatRecordPreviewUrl.value = order.chatRecordUrl || ''
   paymentScreenshotList.value = order.paymentScreenshotUrl
     ? [
         {
           name: '当前付款截图',
           url: order.paymentScreenshotUrl,
+        } as UploadFile,
+      ]
+    : []
+  chatRecordFileList.value = order.chatRecordUrl
+    ? [
+        {
+          name: '当前聊天记录',
+          url: order.chatRecordUrl,
         } as UploadFile,
       ]
     : []
@@ -168,6 +183,28 @@ const openForEdit = async (order: ThirdSalesOrderListItem) => {
     await loadUsers()
   }
   fillFormForEdit(order)
+  visible.value = true
+}
+
+const openForTailPayment = async (order: ThirdSalesOrderListItem, payload: ThirdSalesOrderPayload) => {
+  if (!users.value.length || !paymentAccounts.value.length) {
+    await loadUsers()
+  }
+  fillFormForEdit(order)
+  form.orderType = payload.orderType
+  form.productName = payload.productName
+  form.paymentAmount = payload.paymentAmount
+  form.contractAmount = payload.contractAmount
+  form.paymentSerialNo = payload.paymentSerialNo
+  form.remark = payload.remark || ''
+  form.paymentScreenshot = null
+  form.chatRecordFile = null
+  form.evidenceFiles = []
+  paymentScreenshotList.value = []
+  chatRecordFileList.value = []
+  evidenceFileList.value = []
+  paymentScreenshotPreviewUrl.value = ''
+  chatRecordPreviewUrl.value = ''
   visible.value = true
 }
 
@@ -258,6 +295,41 @@ const handlePaymentScreenshotPaste = (event: ClipboardEvent) => {
 
   handlePaymentScreenshotChange({ raw: file })
   ElMessage.success('付款截图已粘贴')
+}
+
+const handleChatRecordChange = (file: { raw?: File }) => {
+  form.chatRecordFile = file.raw || null
+  chatRecordPreviewUrl.value = file.raw ? URL.createObjectURL(file.raw) : ''
+  chatRecordFileList.value = file.raw
+    ? [
+        {
+          name: file.raw.name,
+          url: chatRecordPreviewUrl.value,
+          raw: file.raw,
+        } as UploadFile,
+      ]
+    : []
+}
+
+const handleChatRecordRemove = () => {
+  form.chatRecordFile = null
+  chatRecordFileList.value = []
+  chatRecordPreviewUrl.value = ''
+}
+
+const handleChatRecordPaste = (event: ClipboardEvent) => {
+  event.preventDefault()
+  const file = Array.from(event.clipboardData?.items || [])
+    .map((item) => item.getAsFile())
+    .find((item): item is File => Boolean(item))
+
+  if (!file) {
+    ElMessage.warning('请先复制聊天记录截图，再粘贴到聊天记录区域')
+    return
+  }
+
+  handleChatRecordChange({ raw: file })
+  ElMessage.success('聊天记录已粘贴')
 }
 
 const amountPattern = /^\d+(\.\d{1,2})?$/
@@ -352,11 +424,13 @@ watch(visible, (value) => {
     Object.assign(form, initialForm())
     evidenceFileList.value = []
     paymentScreenshotList.value = []
+    chatRecordFileList.value = []
     paymentScreenshotPreviewUrl.value = ''
+    chatRecordPreviewUrl.value = ''
   }
 })
 
-defineExpose({ openForCustomer, openForEdit })
+defineExpose({ openForCustomer, openForEdit, openForTailPayment })
 </script>
 
 <template>
@@ -441,9 +515,10 @@ defineExpose({ openForCustomer, openForEdit })
 
           <el-form-item :label="requiresChatRecord ? '聊天记录截图（必传）' : '聊天记录截图（定金可不传）'" class="full-width">
             <div class="page-stack-sm full-width upload-panel card-like-panel">
-              <div class="paste-upload-box" tabindex="0" @paste="handlePaymentScreenshotPaste">{{ requiresChatRecord ? '复制聊天截图后，在这里按 Ctrl+V 粘贴（尾款/全款必传）' : '当前为定金单，聊天截图可不上传' }}</div>
+              <div class="paste-upload-box" tabindex="0" @paste="handleChatRecordPaste">{{ requiresChatRecord ? '复制聊天截图后，在这里按 Ctrl+V 粘贴（尾款/全款必传）' : '当前为定金单，聊天截图可不上传' }}</div>
+              <img v-if="chatRecordPreviewUrl" :src="chatRecordPreviewUrl" alt="聊天记录预览" class="paste-image-preview" />
               <div v-if="isEditMode()" class="upload-tip">编辑时如不重新上传，将保留当前聊天记录</div>
-              <el-upload :auto-upload="false" :show-file-list="true" :limit="1" :file-list="[]" :on-change="(file: any) => { form.chatRecordFile = file.raw || null }" :on-remove="() => { form.chatRecordFile = null }">
+              <el-upload :auto-upload="false" :show-file-list="true" :limit="1" :file-list="chatRecordFileList" :on-change="handleChatRecordChange" :on-remove="handleChatRecordRemove">
                 <el-button>上传聊天记录</el-button>
               </el-upload>
             </div>

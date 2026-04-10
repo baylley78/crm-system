@@ -239,6 +239,29 @@ const openForEdit = async (order: SecondSalesOrderListItem) => {
   visible.value = true
 }
 
+const openForTailPayment = async (order: SecondSalesOrderListItem, payload: SecondSalesOrderPayload) => {
+  if (!users.value.length || !paymentAccounts.value.length) {
+    await loadUsers()
+  }
+  fillFormForEdit(order)
+  form.orderType = payload.orderType
+  form.contractAmount = payload.contractAmount
+  form.secondPaymentAmount = payload.secondPaymentAmount
+  paymentAmountText.value = String(payload.secondPaymentAmount || 0)
+  form.paymentSerialNo = payload.paymentSerialNo
+  form.nextStage = payload.nextStage
+  form.remark = payload.remark || ''
+  form.paymentScreenshot = null
+  form.chatRecordFile = null
+  form.evidenceFiles = []
+  paymentScreenshotList.value = []
+  chatRecordFileList.value = []
+  evidenceFileList.value = []
+  paymentScreenshotPreviewUrl.value = ''
+  chatRecordPreviewUrl.value = ''
+  visible.value = true
+}
+
 const handlePaymentScreenshotChange = (file: { raw?: File }) => {
   form.paymentScreenshot = file.raw || null
   paymentScreenshotPreviewUrl.value = file.raw ? URL.createObjectURL(file.raw) : ''
@@ -463,7 +486,7 @@ watch(visible, (value) => {
   }
 })
 
-defineExpose({ openForCustomer, openForEdit })
+defineExpose({ openForCustomer, openForEdit, openForTailPayment })
 </script>
 
 <template>

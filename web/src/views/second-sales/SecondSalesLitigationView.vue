@@ -8,7 +8,7 @@ import { toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
 import { hasPermission, formatPhone } from '../../utils/permissions'
 import { batchReviewSecondSalesOrders, deleteSecondSalesOrder, fetchSecondSalesOrders } from '../../api/second-sales'
 import SecondSalesOrderDrawer from './SecondSalesOrderDrawer.vue'
-import type { BatchFinanceReviewPayload, SecondSalesOrderListItem } from '../../types'
+import type { BatchFinanceReviewPayload, SecondSalesOrderListItem, SecondSalesOrderPayload } from '../../types'
 
 const loading = ref(false)
 const reviewLoading = ref(false)
@@ -38,6 +38,7 @@ const pageSizeOptions = [30, 50, 100]
 
 const canBatchReviewSecondSales = () => hasPermission('secondSales.review.batch')
 const canEditSecondSales = () => hasPermission('secondSales.edit')
+const canTailSecondSales = () => hasPermission('secondSales.create') || hasPermission('secondSales.edit')
 const canExportSecondSales = () => hasPermission('secondSales.export')
 const canDeleteSecondSales = () => hasPermission('secondSales.delete')
 
@@ -120,6 +121,29 @@ const handleSelectionChange = (rows: SecondSalesOrderListItem[]) => {
 const openEditDrawer = async (order: SecondSalesOrderListItem) => {
   orderDrawerVisible.value = true
   await orderDrawerRef.value?.openForEdit(order)
+}
+
+const canRecordTailPayment = (order: SecondSalesOrderListItem) => order.paymentStatus !== '已付清' && order.orderType !== '尾款'
+
+const openTailPaymentDrawer = async (order: SecondSalesOrderListItem) => {
+  const payload: SecondSalesOrderPayload = {
+    phone: order.phone,
+    secondSalesUserId: order.secondSalesUserId,
+    orderType: 'TAIL',
+    contractAmount: Number(order.arrearsAmount || 0),
+    secondPaymentAmount: Number(order.arrearsAmount || 0),
+    includesHearing: order.includesHearing,
+    paymentAccountId: order.paymentAccountId,
+    paymentSerialNo: '',
+    nextStage: order.currentStatus === '待转三销' ? 'THIRD_SALES' : 'LEGAL',
+    customerName: order.customerName,
+    remark: order.remark,
+    paymentScreenshot: null,
+    chatRecordFile: null,
+    evidenceFiles: [],
+  }
+  orderDrawerVisible.value = true
+  await orderDrawerRef.value?.openForTailPayment(order, payload)
 }
 
 const handleDeleteOrder = async (order: SecondSalesOrderListItem) => {
@@ -270,7 +294,11 @@ onMounted(loadOrders)
         </el-space>
         <el-table ref="orderTableRef" v-loading="loading" :data="paginatedOrders" @selection-change="handleSelectionChange">
           <el-table-column type="selection" width="55" />
-          <el-table-column prop="customerNo" label="客户编号" min-width="150" />
+          <el-table-column label="录单时间" min-width="180">
+            <template #default="scope">
+              {{ formatDateTime(scope.row.createdAt) }}
+            </template>
+          </el-table-column>
           <el-table-column prop="customerName" label="客户姓名" min-width="120" />
           <el-table-column label="手机号码" min-width="140">
             <template #default="scope">{{ formatPhone(scope.row.phone, scope.row) }}</template>
@@ -357,12 +385,16 @@ onMounted(loadOrders)
               <span v-else>-</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" min-width="160" fixed="right">
+          <el-table-column prop="customerNo" label="客户编号" min-width="150" />
+          <el-table-column label="操作" min-width="220" fixed="right">
             <template #default="scope">
-              <el-button v-if="canEditSecondSales()" link type="primary" @click="openEditDrawer(scope.row)">编辑</el-button>
-              <el-tooltip v-if="canDeleteSecondSales()" content="删除二销业绩" placement="top">
-                <el-button link type="danger" :icon="Delete" @click="handleDeleteOrder(scope.row)" />
-              </el-tooltip>
+              <div class="action-cell compact-action-cell">
+                <el-button v-if="canEditSecondSales()" link type="primary" @click="openEditDrawer(scope.row)">编辑</el-button>
+                <el-button v-if="canTailSecondSales() && canRecordTailPayment(scope.row)" link type="warning" @click="openTailPaymentDrawer(scope.row)">补录尾款</el-button>
+                <el-tooltip v-if="canDeleteSecondSales()" content="删除二销业绩" placement="top">
+                  <el-button link type="danger" :icon="Delete" @click="handleDeleteOrder(scope.row)" />
+                </el-tooltip>
+              </div>
             </template>
           </el-table-column>
           <el-table-column label="录入时间" min-width="180">
@@ -406,6 +438,18 @@ onMounted(loadOrders)
 .thumbnail-cell {
   display: flex;
   align-items: center;
+}
+
+.action-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.compact-action-cell :deep(.el-button) {
+  padding: 2px 4px;
+  font-size: 12px;
 }
 
 .evidence-grid {

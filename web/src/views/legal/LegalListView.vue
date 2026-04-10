@@ -211,6 +211,8 @@ const openAttachment = (url?: string) => {
   }
   window.open(absoluteUrl, '_blank', 'noopener')
 }
+
+
 </script>
 
 <template>
@@ -240,16 +242,18 @@ const openAttachment = (url?: string) => {
             <el-table-column label="法务进度" prop="progressStatus" min-width="140" />
             <el-table-column label="操作" width="320">
               <template #default="scope">
-                <el-tooltip v-if="canOperateLegal()" :content="legalActionTip" placement="top">
-                  <el-button link type="primary" @click="openDialog(scope.row)">{{ legalActionLabel }}</el-button>
-                </el-tooltip>
-                <el-button v-if="canCreateRefund()" link type="danger" :loading="refundingId === scope.row.customerId" @click="quickCreateRefund(scope.row)">申请退款</el-button>
-                <el-tooltip v-if="canShowTransfer(scope.row)" content="法务流程已完成，可转入三销接待" placement="top">
-                  <el-button link type="success" :loading="transferringId === scope.row.customerId" @click="transferToThirdSales(scope.row)">移交三销</el-button>
-                </el-tooltip>
-                <el-tooltip v-if="canDeleteCustomers()" content="删除客户" placement="top">
-                  <el-button link type="danger" :icon="Delete" @click="handleDeleteCustomer(scope.row)" />
-                </el-tooltip>
+                <div class="action-cell compact-action-cell">
+                  <el-tooltip v-if="canOperateLegal()" :content="legalActionTip" placement="top">
+                    <el-button link type="primary" @click="openDialog(scope.row)">{{ legalActionLabel }}</el-button>
+                  </el-tooltip>
+                  <el-button v-if="canCreateRefund()" link type="danger" :loading="refundingId === scope.row.customerId" @click="quickCreateRefund(scope.row)">申请退款</el-button>
+                  <el-tooltip v-if="canShowTransfer(scope.row)" content="法务流程已完成，可转入三销接待" placement="top">
+                    <el-button link type="success" :loading="transferringId === scope.row.customerId" @click="transferToThirdSales(scope.row)">移交三销</el-button>
+                  </el-tooltip>
+                  <el-tooltip v-if="canDeleteCustomers()" content="删除客户" placement="top">
+                    <el-button link type="danger" :icon="Delete" @click="handleDeleteCustomer(scope.row)" />
+                  </el-tooltip>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -297,18 +301,126 @@ const openAttachment = (url?: string) => {
                   <el-timeline-item v-if="activeCase.preTrialTransferredAt" :timestamp="activeCase.preTrialTransferredAt">已转庭前</el-timeline-item>
                 </el-timeline>
               </el-card>
-              <div>
-                <div class="evidence-section-title">上游证据</div>
-                <div v-if="activeCase.upstreamEvidenceFileUrls.length" class="evidence-grid">
-                  <div v-for="(item, index) in activeCase.upstreamEvidenceFileUrls" :key="item + '-' + index" class="evidence-card">
-                    <img v-if="isImageFile(item)" :src="toAbsoluteFileUrl(item)" :alt="'上游证据' + (index + 1)" class="evidence-image" @click="openAttachment(item)" />
-                    <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(item)">
-                      <el-icon><Document /></el-icon>
-                      <span>{{ getFileName(item) || '上游证据' + (index + 1) }}</span>
-                    </el-button>
+              <div class="page-stack-sm">
+                <div class="sales-section-card">
+                  <div class="evidence-section-title">一销信息</div>
+                  <el-descriptions :column="1" border>
+                    <el-descriptions-item label="一销备注">{{ activeCase.firstSalesRemark || '-' }}</el-descriptions-item>
+                  </el-descriptions>
+                  <div class="attachment-block">
+                    <div class="attachment-block-title">一销材料</div>
+                    <div v-if="activeCase.firstSalesEvidenceFileUrls.length" class="evidence-grid">
+                      <div v-for="(item, index) in activeCase.firstSalesEvidenceFileUrls" :key="item + '-first-' + index" class="evidence-card">
+                        <img v-if="isImageFile(item)" :src="toAbsoluteFileUrl(item)" :alt="'一销材料' + (index + 1)" class="evidence-image" @click="openAttachment(item)" />
+                        <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(item)">
+                          <el-icon><Document /></el-icon>
+                          <span>{{ getFileName(item) || '一销材料' + (index + 1) }}</span>
+                        </el-button>
+                      </div>
+                    </div>
+                    <el-empty v-else description="暂无一销材料" />
                   </div>
                 </div>
-                <el-empty v-else description="暂无上游证据" />
+
+                <div class="sales-section-card">
+                  <div class="evidence-section-title">二销信息</div>
+                  <el-descriptions :column="1" border>
+                    <el-descriptions-item label="二销备注">{{ activeCase.secondSalesRemark || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="付款信息">{{ activeCase.secondSalesPaymentAmount ?? '-' }} / {{ activeCase.secondSalesPaymentStatus || '-' }}</el-descriptions-item>
+                  </el-descriptions>
+                  <div class="attachment-block">
+                    <div class="attachment-block-title">付款截图</div>
+                    <div v-if="activeCase.secondSalesPaymentScreenshotUrl" class="evidence-grid">
+                      <div class="evidence-card">
+                        <img :src="toAbsoluteFileUrl(activeCase.secondSalesPaymentScreenshotUrl)" alt="二销付款截图" class="evidence-image" @click="openAttachment(activeCase.secondSalesPaymentScreenshotUrl)" />
+                      </div>
+                    </div>
+                    <el-empty v-else description="暂无二销付款截图" />
+                  </div>
+                  <div class="attachment-block">
+                    <div class="attachment-block-title">聊天记录</div>
+                    <div v-if="activeCase.secondSalesChatRecordUrl" class="evidence-grid">
+                      <div class="evidence-card">
+                        <img v-if="isImageFile(activeCase.secondSalesChatRecordUrl)" :src="toAbsoluteFileUrl(activeCase.secondSalesChatRecordUrl)" alt="二销聊天记录" class="evidence-image" @click="openAttachment(activeCase.secondSalesChatRecordUrl)" />
+                        <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(activeCase.secondSalesChatRecordUrl)">
+                          <el-icon><Document /></el-icon>
+                          <span>{{ getFileName(activeCase.secondSalesChatRecordUrl) || '二销聊天记录' }}</span>
+                        </el-button>
+                      </div>
+                    </div>
+                    <el-empty v-else description="暂无二销聊天记录" />
+                  </div>
+                  <div class="attachment-block">
+                    <div class="attachment-block-title">证据材料</div>
+                    <div v-if="activeCase.secondSalesEvidenceFileUrls.length" class="evidence-grid">
+                      <div v-for="(item, index) in activeCase.secondSalesEvidenceFileUrls" :key="item + '-second-' + index" class="evidence-card">
+                        <img v-if="isImageFile(item)" :src="toAbsoluteFileUrl(item)" :alt="'二销材料' + (index + 1)" class="evidence-image" @click="openAttachment(item)" />
+                        <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(item)">
+                          <el-icon><Document /></el-icon>
+                          <span>{{ getFileName(item) || '二销材料' + (index + 1) }}</span>
+                        </el-button>
+                      </div>
+                    </div>
+                    <el-empty v-else description="暂无二销材料" />
+                  </div>
+                </div>
+
+                <div class="sales-section-card">
+                  <div class="evidence-section-title">三销信息</div>
+                  <el-descriptions :column="1" border>
+                    <el-descriptions-item label="三销备注">{{ activeCase.thirdSalesRemark || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="付款信息">{{ activeCase.thirdSalesPaymentAmount ?? '-' }} / {{ activeCase.thirdSalesPaymentStatus || '-' }}</el-descriptions-item>
+                  </el-descriptions>
+                  <div class="attachment-block">
+                    <div class="attachment-block-title">付款截图</div>
+                    <div v-if="activeCase.thirdSalesPaymentScreenshotUrl" class="evidence-grid">
+                      <div class="evidence-card">
+                        <img :src="toAbsoluteFileUrl(activeCase.thirdSalesPaymentScreenshotUrl)" alt="三销付款截图" class="evidence-image" @click="openAttachment(activeCase.thirdSalesPaymentScreenshotUrl)" />
+                      </div>
+                    </div>
+                    <el-empty v-else description="暂无三销付款截图" />
+                  </div>
+                  <div class="attachment-block">
+                    <div class="attachment-block-title">聊天记录</div>
+                    <div v-if="activeCase.thirdSalesChatRecordUrl" class="evidence-grid">
+                      <div class="evidence-card">
+                        <img v-if="isImageFile(activeCase.thirdSalesChatRecordUrl)" :src="toAbsoluteFileUrl(activeCase.thirdSalesChatRecordUrl)" alt="三销聊天记录" class="evidence-image" @click="openAttachment(activeCase.thirdSalesChatRecordUrl)" />
+                        <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(activeCase.thirdSalesChatRecordUrl)">
+                          <el-icon><Document /></el-icon>
+                          <span>{{ getFileName(activeCase.thirdSalesChatRecordUrl) || '三销聊天记录' }}</span>
+                        </el-button>
+                      </div>
+                    </div>
+                    <el-empty v-else description="暂无三销聊天记录" />
+                  </div>
+                  <div class="attachment-block">
+                    <div class="attachment-block-title">证据材料</div>
+                    <div v-if="activeCase.thirdSalesEvidenceFileUrls.length" class="evidence-grid">
+                      <div v-for="(item, index) in activeCase.thirdSalesEvidenceFileUrls" :key="item + '-third-' + index" class="evidence-card">
+                        <img v-if="isImageFile(item)" :src="toAbsoluteFileUrl(item)" :alt="'三销材料' + (index + 1)" class="evidence-image" @click="openAttachment(item)" />
+                        <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(item)">
+                          <el-icon><Document /></el-icon>
+                          <span>{{ getFileName(item) || '三销材料' + (index + 1) }}</span>
+                        </el-button>
+                      </div>
+                    </div>
+                    <el-empty v-else description="暂无三销材料" />
+                  </div>
+                </div>
+
+                <div>
+                  <div class="evidence-section-title">上游证据总览</div>
+                  <div v-if="activeCase.upstreamEvidenceFileUrls.length" class="evidence-grid">
+                    <div v-for="(item, index) in activeCase.upstreamEvidenceFileUrls" :key="item + '-' + index" class="evidence-card">
+                      <img v-if="isImageFile(item)" :src="toAbsoluteFileUrl(item)" :alt="'上游证据' + (index + 1)" class="evidence-image" @click="openAttachment(item)" />
+                      <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(item)">
+                        <el-icon><Document /></el-icon>
+                        <span>{{ getFileName(item) || '上游证据' + (index + 1) }}</span>
+                      </el-button>
+                    </div>
+                  </div>
+                  <el-empty v-else description="暂无上游证据" />
+                </div>
               </div>
             </div>
           </template>
@@ -390,6 +502,18 @@ const openAttachment = (url?: string) => {
 </template>
 
 <style scoped>
+.action-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.compact-action-cell :deep(.el-button) {
+  padding: 2px 4px;
+  font-size: 12px;
+}
+
 .legal-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
@@ -410,6 +534,26 @@ const openAttachment = (url?: string) => {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 12px;
+}
+
+.sales-section-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--el-fill-color-lighter);
+}
+
+.attachment-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attachment-block-title {
+  font-weight: 500;
+  color: var(--el-text-color-regular);
 }
 
 .evidence-section-title {

@@ -14,6 +14,9 @@ const buildMediationFormData = (payload: SaveMediationCasePayload) => {
   if (payload.startDate) {
     formData.append('startDate', payload.startDate)
   }
+  if (payload.ownerId) {
+    formData.append('ownerId', String(payload.ownerId))
+  }
   for (const file of payload.evidenceFiles || []) {
     formData.append('evidenceFiles', file)
   }

@@ -889,14 +889,14 @@ export class ThirdSalesService {
     return labels[status]
   }
 
-  private mapOrderType(orderType: FirstOrderType) {
+  private mapOrderType(orderType?: FirstOrderType | null) {
     const labels: Record<FirstOrderType, string> = {
       DEPOSIT: '定金',
       TAIL: '尾款',
       FULL: '全款',
     }
 
-    return labels[orderType]
+    return labels[orderType ?? FirstOrderType.FULL]
   }
 
   private mapPaymentStatus(status?: string | null) {

@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import helmet from 'helmet';
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import express from 'express';
 import { AppModule } from './app.module';
 
 const DEFAULT_CORS_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174'];
@@ -23,6 +24,12 @@ async function bootstrap() {
   if (!existsSync(uploadDir)) {
     mkdirSync(uploadDir, { recursive: true });
   }
+
+  app.use('/uploads', (_req: any, res: any, next: any) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  });
+  app.use('/uploads', express.static(uploadDir));
 
   app.use(helmet({
     crossOriginResourcePolicy: false,

@@ -66,6 +66,21 @@ export class LegalService {
               paymentScreenshotUrl: true,
               chatRecordUrl: true,
               evidenceFileUrls: true,
+              paymentStatus: true,
+              secondPaymentAmount: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+          thirdSalesOrders: {
+            select: {
+              remark: true,
+              paymentScreenshotUrl: true,
+              chatRecordUrl: true,
+              evidenceFileUrls: true,
+              paymentStatus: true,
+              paymentAmount: true,
               createdAt: true,
             },
             orderBy: { createdAt: 'desc' },
@@ -94,35 +109,10 @@ export class LegalService {
         const latestCase = customer.legalCases[0]
         const latestFirstSalesOrder = customer.firstSalesOrders[0]
         const latestSecondSalesOrder = customer.secondSalesOrders[0]
-        const firstSalesEvidence = customer.firstSalesOrders.flatMap((item) => {
-          const result: string[] = []
-          if (item.paymentScreenshotUrl) {
-            result.push(this.filesService.toAccessUrl(item.paymentScreenshotUrl)!)
-          }
-          if (customer.firstSalesChatRecordUrl) {
-            const accessUrl = this.filesService.toAccessUrl(customer.firstSalesChatRecordUrl)
-            if (accessUrl) {
-              result.push(accessUrl)
-            }
-          }
-          return [
-            ...result,
-            ...this.filesService.toAccessUrls(this.filesService.parseJsonFileUrls(item.evidenceImageUrls)),
-          ]
-        })
-        const secondSalesEvidence = customer.secondSalesOrders.flatMap((item) => {
-          const result: string[] = []
-          if (item.paymentScreenshotUrl) {
-            result.push(this.filesService.toAccessUrl(item.paymentScreenshotUrl)!)
-          }
-          if (item.chatRecordUrl) {
-            result.push(this.filesService.toAccessUrl(item.chatRecordUrl)!)
-          }
-          return [
-            ...result,
-            ...this.filesService.toAccessUrls(this.filesService.parseJsonFileUrls(item.evidenceFileUrls)),
-          ]
-        })
+        const latestThirdSalesOrder = customer.thirdSalesOrders[0]
+        const firstSalesEvidence = customer.firstSalesOrders.flatMap((item) => this.buildFirstSalesEvidence(customer.firstSalesChatRecordUrl, item.paymentScreenshotUrl, item.evidenceImageUrls))
+        const secondSalesEvidence = customer.secondSalesOrders.flatMap((item) => this.buildSalesEvidence(item.paymentScreenshotUrl, item.chatRecordUrl, item.evidenceFileUrls))
+        const thirdSalesEvidence = customer.thirdSalesOrders.flatMap((item) => this.buildSalesEvidence(item.paymentScreenshotUrl, item.chatRecordUrl, item.evidenceFileUrls))
         return {
           customerId: customer.id,
           customerNo: customer.customerNo,
@@ -142,7 +132,19 @@ export class LegalService {
           customerSituationRemark: latestSecondSalesOrder?.remark ?? latestFirstSalesOrder?.remark ?? customer.remark ?? '',
           firstSalesRemark: latestFirstSalesOrder?.remark ?? customer.remark ?? '',
           secondSalesRemark: latestSecondSalesOrder?.remark ?? '',
-          upstreamEvidenceFileUrls: [...firstSalesEvidence, ...secondSalesEvidence],
+          thirdSalesRemark: latestThirdSalesOrder?.remark ?? '',
+          upstreamEvidenceFileUrls: [...firstSalesEvidence, ...secondSalesEvidence, ...thirdSalesEvidence],
+          firstSalesEvidenceFileUrls: firstSalesEvidence,
+          secondSalesEvidenceFileUrls: secondSalesEvidence,
+          thirdSalesEvidenceFileUrls: thirdSalesEvidence,
+          secondSalesPaymentScreenshotUrl: this.filesService.toAccessUrl(latestSecondSalesOrder?.paymentScreenshotUrl),
+          thirdSalesPaymentScreenshotUrl: this.filesService.toAccessUrl(latestThirdSalesOrder?.paymentScreenshotUrl),
+          secondSalesChatRecordUrl: this.filesService.toAccessUrl(latestSecondSalesOrder?.chatRecordUrl),
+          thirdSalesChatRecordUrl: this.filesService.toAccessUrl(latestThirdSalesOrder?.chatRecordUrl),
+          secondSalesPaymentStatus: latestSecondSalesOrder?.paymentStatus ?? '',
+          thirdSalesPaymentStatus: latestThirdSalesOrder?.paymentStatus ?? '',
+          secondSalesPaymentAmount: Number(latestSecondSalesOrder?.secondPaymentAmount ?? 0),
+          thirdSalesPaymentAmount: Number(latestThirdSalesOrder?.paymentAmount ?? 0),
           startDate: latestCase?.startDate?.toISOString(),
           isCompleted: latestCase?.isCompleted ?? false,
           filingApproved: latestCase?.filingApproved ?? false,
@@ -384,6 +386,42 @@ export class LegalService {
     }
 
     return CustomerStatus.LEGAL_PROCESSING
+  }
+
+  private buildFirstSalesEvidence(chatRecordUrl?: string | null, paymentScreenshotUrl?: string | null, evidenceImageUrls?: string | null) {
+    const result: string[] = []
+    const paymentScreenshotAccessUrl = this.filesService.toAccessUrl(paymentScreenshotUrl)
+    if (paymentScreenshotAccessUrl) {
+      result.push(paymentScreenshotAccessUrl)
+    }
+
+    const chatRecordAccessUrl = this.filesService.toAccessUrl(chatRecordUrl)
+    if (chatRecordAccessUrl) {
+      result.push(chatRecordAccessUrl)
+    }
+
+    return [
+      ...result,
+      ...this.filesService.toAccessUrls(this.filesService.parseJsonFileUrls(evidenceImageUrls)),
+    ]
+  }
+
+  private buildSalesEvidence(paymentScreenshotUrl?: string | null, chatRecordUrl?: string | null, evidenceFileUrls?: string | null) {
+    const result: string[] = []
+    const paymentScreenshotAccessUrl = this.filesService.toAccessUrl(paymentScreenshotUrl)
+    if (paymentScreenshotAccessUrl) {
+      result.push(paymentScreenshotAccessUrl)
+    }
+
+    const chatRecordAccessUrl = this.filesService.toAccessUrl(chatRecordUrl)
+    if (chatRecordAccessUrl) {
+      result.push(chatRecordAccessUrl)
+    }
+
+    return [
+      ...result,
+      ...this.filesService.toAccessUrls(this.filesService.parseJsonFileUrls(evidenceFileUrls)),
+    ]
   }
 
   private buildFollowContent(input: { stage: LegalCaseStage; progressStatus: string; filingApproved: boolean; transferredToPreTrial: boolean; isCompleted: boolean }) {

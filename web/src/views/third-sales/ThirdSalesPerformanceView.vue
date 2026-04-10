@@ -7,11 +7,12 @@ import { authStorage } from '../../auth'
 import { toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
 import { hasPermission, formatPhone } from '../../utils/permissions'
 import { batchReviewThirdSalesOrders, deleteThirdSalesOrder, fetchThirdSalesOrders } from '../../api/third-sales'
-import type { BatchFinanceReviewPayload, ThirdSalesOrderListItem } from '../../types'
+import type { BatchFinanceReviewPayload, ThirdSalesOrderListItem, ThirdSalesOrderPayload } from '../../types'
 import RefundCreateDialog from '../refund/RefundCreateDialog.vue'
 import ThirdSalesOrderDrawer from './ThirdSalesOrderDrawer.vue'
 
 const canEditThirdSales = () => hasPermission('thirdSales.edit')
+const canTailThirdSales = () => hasPermission('thirdSales.create') || hasPermission('thirdSales.edit')
 const canBatchReviewThirdSales = () => hasPermission('thirdSales.review.batch')
 const canExportThirdSales = () => hasPermission('thirdSales.export')
 const canCreateRefund = () => hasPermission('refund.create')
@@ -128,6 +129,27 @@ const resetSearch = () => {
 const openEditDrawer = async (order: ThirdSalesOrderListItem) => {
   orderDrawerVisible.value = true
   await orderDrawerRef.value?.openForEdit(order)
+}
+
+const canRecordTailPayment = (order: ThirdSalesOrderListItem) => order.paymentStatus !== '已付清' && order.orderType !== '尾款'
+
+const openTailPaymentDrawer = async (order: ThirdSalesOrderListItem) => {
+  const payload: ThirdSalesOrderPayload = {
+    phone: order.phone,
+    thirdSalesUserId: order.thirdSalesUserId || 0,
+    orderType: 'TAIL',
+    productName: order.productName,
+    paymentAmount: String(Number(order.arrearsAmount || 0)),
+    contractAmount: String(Number(order.arrearsAmount || 0)),
+    paymentAccountId: order.paymentAccountId || 0,
+    paymentSerialNo: '',
+    remark: order.remark,
+    paymentScreenshot: null,
+    chatRecordFile: null,
+    evidenceFiles: [],
+  }
+  orderDrawerVisible.value = true
+  await orderDrawerRef.value?.openForTailPayment(order, payload)
 }
 
 const quickCreateRefund = async (order: ThirdSalesOrderListItem) => {
@@ -322,7 +344,7 @@ onMounted(loadOrders)
             </el-space>
             <el-table ref="orderTableRef" v-loading="ordersLoading" :data="paginatedOrders" @selection-change="handleSelectionChange">
               <el-table-column type="selection" width="55" />
-              <el-table-column prop="customerNo" label="客户编号" min-width="150" />
+              <el-table-column label="录单时间" min-width="180"><template #default="scope">{{ formatDateTime(scope.row.createdAt) }}</template></el-table-column>
               <el-table-column prop="customerName" label="客户姓名" min-width="120" />
               <el-table-column label="手机号码" min-width="140">
                 <template #default="scope">{{ formatPhone(scope.row.phone, scope.row) }}</template>
@@ -380,13 +402,17 @@ onMounted(loadOrders)
               <el-table-column label="审核时间" min-width="180"><template #default="scope">{{ formatDateTime(scope.row.financeReviewedAt) }}</template></el-table-column>
               <el-table-column label="审核备注" prop="financeReviewRemark" min-width="180" show-overflow-tooltip />
               <el-table-column prop="remark" label="备注" min-width="220" show-overflow-tooltip><template #default="scope">{{ scope.row.remark || '-' }}</template></el-table-column>
-              <el-table-column label="操作" min-width="240" fixed="right">
+              <el-table-column prop="customerNo" label="客户编号" min-width="150" />
+              <el-table-column label="操作" min-width="280" fixed="right">
                 <template #default="scope">
-                  <el-button v-if="canEditThirdSales()" link type="primary" @click="openEditDrawer(scope.row)">编辑</el-button>
-                  <el-button v-if="canCreateRefund()" link type="danger" :loading="refundSubmittingId === scope.row.id" @click="quickCreateRefund(scope.row)">申请退款</el-button>
-                  <el-tooltip v-if="canDeleteThirdSales()" content="删除三销业绩" placement="top">
-                    <el-button link type="danger" :icon="Delete" @click="handleDeleteOrder(scope.row)" />
-                  </el-tooltip>
+                  <div class="action-cell compact-action-cell">
+                    <el-button v-if="canEditThirdSales()" link type="primary" @click="openEditDrawer(scope.row)">编辑</el-button>
+                    <el-button v-if="canTailThirdSales() && canRecordTailPayment(scope.row)" link type="warning" @click="openTailPaymentDrawer(scope.row)">补录尾款</el-button>
+                    <el-button v-if="canCreateRefund()" link type="danger" :loading="refundSubmittingId === scope.row.id" @click="quickCreateRefund(scope.row)">申请退款</el-button>
+                    <el-tooltip v-if="canDeleteThirdSales()" content="删除三销业绩" placement="top">
+                      <el-button link type="danger" :icon="Delete" @click="handleDeleteOrder(scope.row)" />
+                    </el-tooltip>
+                  </div>
                 </template>
               </el-table-column>
               <el-table-column label="录入时间" min-width="180"><template #default="scope">{{ formatDateTime(scope.row.createdAt) }}</template></el-table-column>
@@ -425,6 +451,17 @@ onMounted(loadOrders)
   justify-content: flex-end;
 }
 
+.action-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.compact-action-cell :deep(.el-button) {
+  padding: 2px 4px;
+  font-size: 12px;
+}
 
 .success-text {
   color: var(--el-color-success);
