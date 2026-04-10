@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer'
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator'
+import { IsDateString, IsInt, IsOptional, IsString, Max, Min } from 'class-validator'
 
 export class QueryOrderListDto {
   @IsOptional()
@@ -49,4 +49,22 @@ export class QueryOrderListDto {
   @Type(() => String)
   @IsString()
   paymentStatus?: string
+
+  @IsOptional()
+  @Type(() => String)
+  @IsString()
+  departmentId?: string
+
+  @IsOptional()
+  @Type(() => String)
+  @IsString()
+  financeReviewStatus?: string
+
+  @IsOptional()
+  @IsDateString()
+  startTime?: string
+
+  @IsOptional()
+  @IsDateString()
+  endTime?: string
 }

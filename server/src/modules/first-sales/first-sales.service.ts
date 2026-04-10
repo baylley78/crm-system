@@ -11,6 +11,7 @@ import { FinanceReviewActionDto, FinanceReviewActionTypeDto } from './dto/financ
 import { BatchFinanceReviewDto } from './dto/batch-finance-review.dto'
 import { DingTalkReportService } from '../dingtalk-report/dingtalk-report.service'
 import { QueryOrderListDto } from '../../common/dto/query-order-list.dto'
+import { PaymentSerialValidatorService } from '../../common/services/payment-serial-validator.service'
 
 const FIRST_SALES_ROLE_CODES = ['SUPER_ADMIN', 'FIRST_SALES_MANAGER', 'FIRST_SALES_SUPERVISOR', 'FIRST_SALES']
 const FIRST_SALES_TIME_EDIT_PERMISSION = 'firstSales.time.edit'
@@ -23,6 +24,7 @@ export class FirstSalesService implements OnModuleInit {
     private readonly paymentAccountsService: PaymentAccountsService,
     private readonly dingTalkReportService: DingTalkReportService,
     private readonly filesService: FilesService,
+    private readonly paymentSerialValidatorService: PaymentSerialValidatorService,
   ) {}
 
   async onModuleInit() {
@@ -40,7 +42,7 @@ export class FirstSalesService implements OnModuleInit {
   ) {
     await this.ensureSalesUserWithinScope(currentUser, dto.salesUserId)
 
-    await this.ensurePaymentSerialNoUnique(dto.paymentSerialNo)
+    await this.paymentSerialValidatorService.ensureUnique(dto.paymentSerialNo)
 
     const salesUser = await this.prisma.user.findUnique({
       where: { id: dto.salesUserId },
@@ -185,7 +187,7 @@ export class FirstSalesService implements OnModuleInit {
     }
 
     const paymentAccount = await this.paymentAccountsService.ensureAvailable(dto.paymentAccountId)
-    await this.ensurePaymentSerialNoUnique(dto.paymentSerialNo)
+    await this.paymentSerialValidatorService.ensureUnique(dto.paymentSerialNo)
     const paymentAmount = Number(dto.paymentAmount)
     const targetAmount = Number(dto.targetAmount)
     const arrearsAmount = Number(dto.arrearsAmount)
@@ -301,7 +303,7 @@ export class FirstSalesService implements OnModuleInit {
       throw new BadRequestException('该手机号已绑定其他客户')
     }
 
-    await this.ensurePaymentSerialNoUnique(dto.paymentSerialNo, { stage: 'FIRST', id })
+    await this.paymentSerialValidatorService.ensureUnique(dto.paymentSerialNo, { stage: 'FIRST', id })
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const nextTotalPaymentAmount = Number(order.customer.totalPaymentAmount) - Number(order.paymentAmount) + paymentAmount
@@ -442,37 +444,50 @@ export class FirstSalesService implements OnModuleInit {
   }
 
   async findOrders(currentUser: AuthenticatedUser, query?: QueryOrderListDto) {
+    const page = query?.page ?? 1
+    const pageSize = query?.pageSize ?? 30
+    const skip = (page - 1) * pageSize
     const where = {
       ...(await this.buildVisibilityWhere(currentUser)),
-      ...this.buildQueryWhere(query),
+      ...(await this.buildQueryWhere(query, currentUser)),
     }
 
-    const orders = await this.prisma.firstSalesOrder.findMany({
-      where,
-      include: {
-        customer: {
-          include: {
-            firstSalesUser: {
-              include: {
-                departmentInfo: {
-                  include: {
-                    parent: true,
+    const [orders, total] = await this.prisma.$transaction([
+      this.prisma.firstSalesOrder.findMany({
+        where,
+        include: {
+          customer: {
+            include: {
+              firstSalesUser: {
+                include: {
+                  departmentInfo: {
+                    include: {
+                      parent: true,
+                    },
                   },
                 },
               },
             },
           },
+          salesUser: true,
+          financeReviewer: true,
+          paymentAccount: true,
         },
-        salesUser: true,
-        financeReviewer: true,
-        paymentAccount: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    })
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.firstSalesOrder.count({ where }),
+    ])
 
-    return orders.map((order) => this.mapOrder(order))
+    return {
+      items: orders.map((order) => this.mapOrder(order)),
+      total,
+      page,
+      pageSize,
+    }
   }
 
   async reviewOrder(currentUser: AuthenticatedUser, id: number, dto: FinanceReviewActionDto) {
@@ -642,29 +657,6 @@ export class FirstSalesService implements OnModuleInit {
       }))
   }
 
-  private async ensurePaymentSerialNoUnique(paymentSerialNo: string, current?: { stage: 'FIRST' | 'SECOND' | 'THIRD'; id: number }) {
-    const normalized = paymentSerialNo.trim()
-    if (!normalized) {
-      return
-    }
-
-    const [firstOrder, secondOrder, thirdOrder] = await Promise.all([
-      this.prisma.firstSalesOrder.findFirst({ where: { paymentSerialNo: normalized }, select: { id: true } }),
-      this.prisma.secondSalesOrder.findFirst({ where: { paymentSerialNo: normalized }, select: { id: true } }),
-      this.prisma.thirdSalesOrder.findFirst({ where: { paymentSerialNo: normalized }, select: { id: true } }),
-    ])
-
-    const duplicated = [
-      firstOrder ? { stage: 'FIRST' as const, id: firstOrder.id } : null,
-      secondOrder ? { stage: 'SECOND' as const, id: secondOrder.id } : null,
-      thirdOrder ? { stage: 'THIRD' as const, id: thirdOrder.id } : null,
-    ].find((item) => item && (!current || item.stage !== current.stage || item.id !== current.id))
-
-    if (duplicated) {
-      throw new BadRequestException('付款单号已存在')
-    }
-  }
-
   private async buildVisibilityWhere(currentUser: AuthenticatedUser): Promise<Prisma.FirstSalesOrderWhereInput> {
     switch (currentUser.reportScope) {
       case DataScope.ALL:
@@ -696,12 +688,117 @@ export class FirstSalesService implements OnModuleInit {
     }
   }
 
-  private buildQueryWhere(query?: QueryOrderListDto): Prisma.FirstSalesOrderWhereInput {
+  private async resolveFilteredDepartmentIds(currentUser: AuthenticatedUser, departmentId?: string) {
+    if (!departmentId) {
+      if (currentUser.reportScope === DataScope.ALL) {
+        return null
+      }
+      if (!currentUser.departmentId) {
+        return []
+      }
+      return currentUser.reportScope === DataScope.DEPARTMENT_AND_CHILDREN
+        ? this.departmentsService.findDepartmentAndDescendantIds(currentUser.departmentId)
+        : [currentUser.departmentId]
+    }
+
+    const targetId = Number(departmentId)
+    if (!Number.isFinite(targetId)) {
+      return []
+    }
+
+    if (currentUser.reportScope === DataScope.ALL) {
+      return [targetId]
+    }
+
+    if (!currentUser.departmentId) {
+      return []
+    }
+
+    const visibleDepartmentIds = currentUser.reportScope === DataScope.DEPARTMENT_AND_CHILDREN
+      ? await this.departmentsService.findDepartmentAndDescendantIds(currentUser.departmentId)
+      : [currentUser.departmentId]
+
+    return visibleDepartmentIds.includes(targetId) ? [targetId] : []
+  }
+
+  private buildOrderTimeWhere(query?: QueryOrderListDto): Prisma.DateTimeFilter | undefined {
+    const startTime = query?.startTime ? new Date(query.startTime) : undefined
+    const endTime = query?.endTime ? new Date(query.endTime) : undefined
+
+    if (!startTime && !endTime) {
+      return undefined
+    }
+
+    return {
+      ...(startTime ? { gte: startTime } : {}),
+      ...(endTime ? { lte: endTime } : {}),
+    }
+  }
+
+  private async buildQueryWhere(query?: QueryOrderListDto, currentUser?: AuthenticatedUser): Promise<Prisma.FirstSalesOrderWhereInput> {
+    const customerName = query?.customerName?.trim()
+    const phone = query?.phone?.trim()
+    const firstSalesUserName = query?.firstSalesUserName?.trim()
     const paymentAccountName = query?.paymentAccountName?.trim()
     const paymentSerialNo = query?.paymentSerialNo?.trim()
     const tailPaymentSerialNo = query?.tailPaymentSerialNo?.trim()
+    const paymentStatus = query?.paymentStatus?.trim()
+    const financeReviewStatus = query?.financeReviewStatus?.trim()
+    const orderDate = this.buildOrderTimeWhere(query)
+    const filteredDepartmentIds = currentUser ? await this.resolveFilteredDepartmentIds(currentUser, query?.departmentId) : null
 
     return {
+      ...(customerName
+        ? {
+            customer: {
+              name: {
+                contains: customerName,
+                mode: 'insensitive',
+              },
+            },
+          }
+        : {}),
+      ...(phone
+        ? {
+            customer: {
+              ...(customerName
+                ? {
+                    name: {
+                      contains: customerName,
+                      mode: 'insensitive',
+                    },
+                  }
+                : {}),
+              phone: {
+                contains: phone,
+                mode: 'insensitive',
+              },
+            },
+          }
+        : {}),
+      ...(firstSalesUserName || filteredDepartmentIds?.length
+        ? {
+            salesUser: {
+              ...(firstSalesUserName
+                ? {
+                    realName: {
+                      contains: firstSalesUserName,
+                      mode: 'insensitive',
+                    },
+                  }
+                : {}),
+              ...(filteredDepartmentIds?.length
+                ? {
+                    departmentId: {
+                      in: filteredDepartmentIds,
+                    },
+                  }
+                : {}),
+            },
+          }
+        : filteredDepartmentIds?.length === 0
+          ? { id: -1 }
+          : {}),
       ...(paymentAccountName
         ? {
             paymentAccountName: {
@@ -718,6 +815,9 @@ export class FirstSalesService implements OnModuleInit {
             },
           }
         : {}),
+      ...(paymentStatus ? { paymentStatus } : {}),
+      ...(financeReviewStatus ? { financeReviewStatus: financeReviewStatus as FinanceReviewStatus } : {}),
+      ...(orderDate ? { orderDate } : {}),
       ...(tailPaymentSerialNo
         ? {
             AND: [

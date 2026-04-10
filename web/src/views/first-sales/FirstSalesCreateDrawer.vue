@@ -300,6 +300,8 @@ const handleChatRecordPaste = (event: ClipboardEvent) => {
   handlePasteFile(event, 'chatRecordFile')
 }
 
+const isValidPhone = (value: string) => /^\d{11}$/.test(value.trim())
+
 const validateForm = () => {
   if (!form.customerName.trim()) {
     ElMessage.warning('请输入客户姓名')
@@ -308,6 +310,11 @@ const validateForm = () => {
 
   if (!form.phone.trim()) {
     ElMessage.warning('请输入手机号')
+    return false
+  }
+
+  if (!isValidPhone(form.phone)) {
+    ElMessage.warning('客户手机号必须为11位数字')
     return false
   }
 

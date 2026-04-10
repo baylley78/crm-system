@@ -6,6 +6,7 @@ import type {
   FirstSalesCreateResult,
   FirstSalesListItem,
   FirstSalesTailOrderPayload,
+  PaginatedResponse,
   SalesUserOption,
 } from '../types'
 
@@ -76,8 +77,22 @@ const toFirstSalesTailFormData = (payload: FirstSalesTailOrderPayload) => {
   return formData
 }
 
-export const fetchFirstSalesOrders = async (params?: { paymentAccountName?: string; paymentSerialNo?: string; tailPaymentSerialNo?: string }) => {
-  const { data } = await request.get<FirstSalesListItem[]>('/first-sales/orders', { params })
+export const fetchFirstSalesOrders = async (params?: {
+  page?: number
+  pageSize?: number
+  customerName?: string
+  phone?: string
+  firstSalesUserName?: string
+  paymentAccountName?: string
+  paymentSerialNo?: string
+  tailPaymentSerialNo?: string
+  paymentStatus?: string
+  departmentId?: string
+  financeReviewStatus?: string
+  startTime?: string
+  endTime?: string
+}) => {
+  const { data } = await request.get<PaginatedResponse<FirstSalesListItem>>('/first-sales/orders', { params })
   return data
 }
 

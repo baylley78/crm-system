@@ -11,6 +11,7 @@ import { BatchFinanceReviewDto } from '../first-sales/dto/batch-finance-review.d
 import { FinanceReviewActionDto, FinanceReviewActionTypeDto } from '../first-sales/dto/finance-review-action.dto'
 import { DingTalkReportService } from '../dingtalk-report/dingtalk-report.service'
 import { QueryOrderListDto } from '../../common/dto/query-order-list.dto'
+import { PaymentSerialValidatorService } from '../../common/services/payment-serial-validator.service'
 import { CreateSecondSalesOrderDto } from './dto/second-sales.dto'
 
 @Injectable()
@@ -71,30 +72,8 @@ export class SecondSalesService {
     private readonly courtConfigService: CourtConfigService,
     private readonly dingTalkReportService: DingTalkReportService,
     private readonly filesService: FilesService,
+    private readonly paymentSerialValidatorService: PaymentSerialValidatorService,
   ) {}
-
-  private async ensurePaymentSerialNoUnique(paymentSerialNo: string, current?: { stage: 'FIRST' | 'SECOND' | 'THIRD'; id: number }) {
-    const normalized = paymentSerialNo.trim()
-    if (!normalized) {
-      return
-    }
-
-    const [firstOrder, secondOrder, thirdOrder] = await Promise.all([
-      this.prisma.firstSalesOrder.findFirst({ where: { paymentSerialNo: normalized }, select: { id: true } }),
-      this.prisma.secondSalesOrder.findFirst({ where: { paymentSerialNo: normalized }, select: { id: true } }),
-      this.prisma.thirdSalesOrder.findFirst({ where: { paymentSerialNo: normalized }, select: { id: true } }),
-    ])
-
-    const duplicated = [
-      firstOrder ? { stage: 'FIRST' as const, id: firstOrder.id } : null,
-      secondOrder ? { stage: 'SECOND' as const, id: secondOrder.id } : null,
-      thirdOrder ? { stage: 'THIRD' as const, id: thirdOrder.id } : null,
-    ].find((item) => item && (!current || item.stage !== current.stage || item.id !== current.id))
-
-    if (duplicated) {
-      throw new BadRequestException('付款单号已存在')
-    }
-  }
 
   async findOrders(currentUser: AuthenticatedUser, query?: QueryOrderListDto) {
     const page = query?.page ?? 1
@@ -102,7 +81,7 @@ export class SecondSalesService {
     const skip = (page - 1) * pageSize
     const where = {
       ...(await this.buildVisibilityWhere(currentUser)),
-      ...this.buildQueryWhere(query),
+      ...(await this.buildQueryWhere(query, currentUser)),
     }
 
     const [orders, total] = await this.prisma.$transaction([
@@ -183,7 +162,7 @@ export class SecondSalesService {
       throw new BadRequestException('客户不存在，请先录入一销')
     }
 
-    await this.ensurePaymentSerialNoUnique(dto.paymentSerialNo)
+    await this.paymentSerialValidatorService.ensureUnique(dto.paymentSerialNo)
 
     const paymentAccount = await this.paymentAccountsService.ensureAvailable(dto.paymentAccountId)
     const contractAmount = Number(dto.contractAmount)
@@ -298,7 +277,7 @@ export class SecondSalesService {
     }
 
     const paymentAccount = await this.paymentAccountsService.ensureAvailable(dto.paymentAccountId)
-    await this.ensurePaymentSerialNoUnique(dto.paymentSerialNo, { stage: 'SECOND', id })
+    await this.paymentSerialValidatorService.ensureUnique(dto.paymentSerialNo, { stage: 'SECOND', id })
     const contractAmount = Number(dto.contractAmount)
     const secondPaymentAmount = Number(dto.secondPaymentAmount)
     const arrearsAmount = Math.max(contractAmount - secondPaymentAmount, 0)
@@ -569,7 +548,54 @@ export class SecondSalesService {
     return { success: true }
   }
 
-  private buildQueryWhere(query?: QueryOrderListDto): Prisma.SecondSalesOrderWhereInput {
+  private async resolveFilteredDepartmentIds(currentUser: AuthenticatedUser, departmentId?: string) {
+    if (!departmentId) {
+      if (currentUser.reportScope === DataScope.ALL) {
+        return null
+      }
+      if (!currentUser.departmentId) {
+        return []
+      }
+      return currentUser.reportScope === DataScope.DEPARTMENT_AND_CHILDREN
+        ? this.departmentsService.findDepartmentAndDescendantIds(currentUser.departmentId)
+        : [currentUser.departmentId]
+    }
+
+    const targetId = Number(departmentId)
+    if (!Number.isFinite(targetId)) {
+      return []
+    }
+
+    if (currentUser.reportScope === DataScope.ALL) {
+      return [targetId]
+    }
+
+    if (!currentUser.departmentId) {
+      return []
+    }
+
+    const visibleDepartmentIds = currentUser.reportScope === DataScope.DEPARTMENT_AND_CHILDREN
+      ? await this.departmentsService.findDepartmentAndDescendantIds(currentUser.departmentId)
+      : [currentUser.departmentId]
+
+    return visibleDepartmentIds.includes(targetId) ? [targetId] : []
+  }
+
+  private buildOrderTimeWhere(query?: QueryOrderListDto): Prisma.DateTimeFilter | undefined {
+    const startTime = query?.startTime ? new Date(query.startTime) : undefined
+    const endTime = query?.endTime ? new Date(query.endTime) : undefined
+
+    if (!startTime && !endTime) {
+      return undefined
+    }
+
+    return {
+      ...(startTime ? { gte: startTime } : {}),
+      ...(endTime ? { lte: endTime } : {}),
+    }
+  }
+
+  private async buildQueryWhere(query: QueryOrderListDto | undefined, currentUser: AuthenticatedUser): Promise<Prisma.SecondSalesOrderWhereInput> {
     const customerName = query?.customerName?.trim()
     const phone = query?.phone?.trim()
     const firstSalesUserName = query?.firstSalesUserName?.trim()
@@ -577,6 +603,9 @@ export class SecondSalesService {
     const paymentSerialNo = query?.paymentSerialNo?.trim()
     const tailPaymentSerialNo = query?.tailPaymentSerialNo?.trim()
     const paymentStatus = query?.paymentStatus?.trim()
+    const financeReviewStatus = query?.financeReviewStatus?.trim()
+    const orderDate = this.buildOrderTimeWhere(query)
+    const filteredDepartmentIds = await this.resolveFilteredDepartmentIds(currentUser, query?.departmentId)
 
     return {
       ...(customerName
@@ -639,6 +668,17 @@ export class SecondSalesService {
             },
           }
         : {}),
+      ...(filteredDepartmentIds?.length
+        ? {
+            secondSalesUser: {
+              departmentId: {
+                in: filteredDepartmentIds,
+              },
+            },
+          }
+        : filteredDepartmentIds?.length === 0
+          ? { id: -1 }
+          : {}),
       ...(paymentAccountName
         ? {
             paymentAccountName: {
@@ -655,11 +695,9 @@ export class SecondSalesService {
             },
           }
         : {}),
-      ...(paymentStatus
-        ? {
-            paymentStatus,
-          }
-        : {}),
+      ...(paymentStatus ? { paymentStatus } : {}),
+      ...(financeReviewStatus ? { financeReviewStatus: financeReviewStatus as FinanceReviewStatus } : {}),
+      ...(orderDate ? { orderDate } : {}),
       ...(tailPaymentSerialNo
         ? {
             AND: [

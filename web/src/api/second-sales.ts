@@ -32,6 +32,10 @@ export const fetchSecondSalesOrders = async (params?: {
   paymentSerialNo?: string
   tailPaymentSerialNo?: string
   paymentStatus?: string
+  departmentId?: string
+  financeReviewStatus?: string
+  startTime?: string
+  endTime?: string
 }) => {
   const { data } = await request.get<PaginatedResponse<SecondSalesOrderListItem>>('/second-sales/orders', { params })
   return data

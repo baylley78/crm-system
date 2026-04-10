@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer'
-import { IsBooleanString, IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator'
+import { IsBooleanString, IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Min } from 'class-validator'
 
 export class CreateFirstSalesTailOrderDto {
   @IsNumber()

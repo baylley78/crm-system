@@ -4,13 +4,16 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 import * as XLSX from 'xlsx'
 import { authStorage } from '../../auth'
+import { fetchDepartmentTree } from '../../api/departments'
 import { toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
 import { hasPermission, formatPhone } from '../../utils/permissions'
 import { batchReviewThirdSalesOrders, deleteThirdSalesOrder, fetchThirdSalesOrders } from '../../api/third-sales'
-import type { BatchFinanceReviewPayload, ThirdSalesOrderListItem, ThirdSalesOrderPayload } from '../../types'
+import type { BatchFinanceReviewPayload, DepartmentTreeItem, ThirdSalesOrderListItem, ThirdSalesOrderPayload } from '../../types'
 import RefundCreateDialog from '../refund/RefundCreateDialog.vue'
 import ThirdSalesOrderDrawer from './ThirdSalesOrderDrawer.vue'
 
+const filtersCollapsed = ref(true)
+const departmentOptions = ref<Array<{ id: number; name: string }>>([])
 const canEditThirdSales = () => hasPermission('thirdSales.edit')
 const canTailThirdSales = () => hasPermission('thirdSales.create') || hasPermission('thirdSales.edit')
 const canBatchReviewThirdSales = () => hasPermission('thirdSales.review.batch')
@@ -42,10 +45,25 @@ const searchForm = ref({
   paymentSerialNo: '',
   tailPaymentSerialNo: '',
   paymentStatus: '',
+  departmentId: '',
+  financeReviewStatus: '',
+  timeRange: [] as string[],
 })
+const financeReviewPartitionOptions = [
+  { label: '全部', value: '' },
+  { label: '待审核', value: 'PENDING' },
+  { label: '已通过', value: 'APPROVED' },
+  { label: '已驳回', value: 'REJECTED' },
+]
 const currentPage = ref(1)
 const pageSize = ref(30)
 const pageSizeOptions = [30, 50, 100]
+
+const flattenDepartments = (items: DepartmentTreeItem[], prefix = ''): Array<{ id: number; name: string }> =>
+  items.flatMap((item) => {
+    const label = prefix ? `${prefix} / ${item.name}` : item.name
+    return [{ id: item.id, name: label }, ...flattenDepartments(item.children || [], label)]
+  })
 
 const formatDateTime = (value?: string) => value?.replace('T', ' ').slice(0, 19) || '-'
 const formatCurrency = (value?: number) => `¥${Number(value ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -101,6 +119,10 @@ const loadOrders = async () => {
       paymentSerialNo: searchForm.value.paymentSerialNo || undefined,
       tailPaymentSerialNo: searchForm.value.tailPaymentSerialNo || undefined,
       paymentStatus: searchForm.value.paymentStatus || undefined,
+      departmentId: searchForm.value.departmentId || undefined,
+      financeReviewStatus: searchForm.value.financeReviewStatus || undefined,
+      startTime: searchForm.value.timeRange[0] || undefined,
+      endTime: searchForm.value.timeRange[1] || undefined,
     })
     orders.value = result.items
     total.value = result.total
@@ -114,6 +136,20 @@ const handleSearch = () => {
   loadOrders()
 }
 
+const loadDepartments = async () => {
+  if (!hasPermission('system.departments.view')) {
+    departmentOptions.value = []
+    return
+  }
+  departmentOptions.value = flattenDepartments(await fetchDepartmentTree())
+}
+
+const applyFinancePartition = (status: string) => {
+  searchForm.value.financeReviewStatus = status
+  currentPage.value = 1
+  loadOrders()
+}
+
 const resetSearch = () => {
   searchForm.value.customerName = ''
   searchForm.value.phone = ''
@@ -122,6 +158,9 @@ const resetSearch = () => {
   searchForm.value.paymentSerialNo = ''
   searchForm.value.tailPaymentSerialNo = ''
   searchForm.value.paymentStatus = ''
+  searchForm.value.departmentId = ''
+  searchForm.value.financeReviewStatus = ''
+  searchForm.value.timeRange = []
   currentPage.value = 1
   loadOrders()
 }
@@ -281,7 +320,10 @@ watch(currentPage, () => {
   loadOrders()
 })
 
-onMounted(loadOrders)
+onMounted(async () => {
+  await loadDepartments()
+  await loadOrders()
+})
 </script>
 
 <template>
@@ -292,37 +334,70 @@ onMounted(loadOrders)
       <div class="page-stack">
 
         <el-card shadow="never">
-          <template #header>搜索条件</template>
-          <el-form inline>
-            <el-form-item label="客户姓名">
-              <el-input v-model="searchForm.customerName" placeholder="请输入客户姓名" clearable />
-            </el-form-item>
-            <el-form-item label="手机号码">
-              <el-input v-model="searchForm.phone" placeholder="请输入手机号码" clearable />
-            </el-form-item>
-            <el-form-item label="一销人员">
-              <el-input v-model="searchForm.firstSalesUserName" placeholder="请输入一销人员" clearable />
-            </el-form-item>
-            <el-form-item label="收款账户">
-              <el-input v-model="searchForm.paymentAccountName" placeholder="请输入收款账户" clearable />
-            </el-form-item>
-            <el-form-item label="付款单号">
-              <el-input v-model="searchForm.paymentSerialNo" placeholder="请输入付款单号" clearable />
-            </el-form-item>
-            <el-form-item label="尾款单号">
-              <el-input v-model="searchForm.tailPaymentSerialNo" placeholder="请输入尾款单号" clearable />
-            </el-form-item>
-            <el-form-item label="付款状态">
-              <el-select v-model="searchForm.paymentStatus" placeholder="请选择付款状态" clearable>
-                <el-option label="部分付款" value="PARTIAL" />
-                <el-option label="已付清" value="PAID" />
-              </el-select>
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="handleSearch">搜索</el-button>
-              <el-button @click="resetSearch">重置</el-button>
-            </el-form-item>
-          </el-form>
+          <template #header>
+            <div class="card-header-row">
+              <span>搜索条件</span>
+              <el-button link type="primary" @click="filtersCollapsed = !filtersCollapsed">
+                {{ filtersCollapsed ? '展开' : '收起' }}
+              </el-button>
+            </div>
+          </template>
+          <div v-show="!filtersCollapsed">
+            <el-space wrap class="search-shortcuts">
+              <el-button @click="applyFinancePartition('PENDING')">待审核</el-button>
+              <el-button @click="applyFinancePartition('APPROVED')">已通过</el-button>
+              <el-button @click="applyFinancePartition('REJECTED')">已驳回</el-button>
+              <el-button @click="applyFinancePartition('')">全部审核</el-button>
+            </el-space>
+            <el-form inline>
+              <el-form-item label="客户姓名">
+                <el-input v-model="searchForm.customerName" placeholder="请输入客户姓名" clearable />
+              </el-form-item>
+              <el-form-item label="手机号码">
+                <el-input v-model="searchForm.phone" placeholder="请输入手机号码" clearable />
+              </el-form-item>
+              <el-form-item label="一销人员">
+                <el-input v-model="searchForm.firstSalesUserName" placeholder="请输入一销人员" clearable />
+              </el-form-item>
+              <el-form-item label="部门">
+                <el-select v-model="searchForm.departmentId" placeholder="请选择部门" clearable filterable style="width: 180px">
+                  <el-option v-for="item in departmentOptions" :key="item.id" :label="item.name" :value="String(item.id)" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="收款账户">
+                <el-input v-model="searchForm.paymentAccountName" placeholder="请输入收款账户" clearable />
+              </el-form-item>
+              <el-form-item label="付款单号">
+                <el-input v-model="searchForm.paymentSerialNo" placeholder="请输入付款单号" clearable />
+              </el-form-item>
+              <el-form-item label="尾款单号">
+                <el-input v-model="searchForm.tailPaymentSerialNo" placeholder="请输入尾款单号" clearable />
+              </el-form-item>
+              <el-form-item label="付款状态">
+                <el-select v-model="searchForm.paymentStatus" placeholder="请选择付款状态" clearable>
+                  <el-option label="部分付款" value="PARTIAL" />
+                  <el-option label="已付清" value="PAID" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="审核分区">
+                <el-segmented v-model="searchForm.financeReviewStatus" :options="financeReviewPartitionOptions" />
+              </el-form-item>
+              <el-form-item label="时间范围">
+                <el-date-picker
+                  v-model="searchForm.timeRange"
+                  type="datetimerange"
+                  range-separator="至"
+                  start-placeholder="开始时间"
+                  end-placeholder="结束时间"
+                  value-format="YYYY-MM-DDTHH:mm:ss"
+                />
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" @click="handleSearch">搜索</el-button>
+                <el-button @click="resetSearch">重置</el-button>
+              </el-form-item>
+            </el-form>
+          </div>
         </el-card>
 
         <div class="stats-grid">

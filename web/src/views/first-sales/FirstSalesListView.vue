@@ -4,10 +4,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 import * as XLSX from 'xlsx'
 import { authStorage } from '../../auth'
+import { fetchDepartmentTree } from '../../api/departments'
 import { hasPermission, formatPhone } from '../../utils/permissions'
 import { toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
 import { batchReviewFirstSalesOrders, deleteFirstSalesOrder, fetchFirstSalesOrders } from '../../api/first-sales'
-import type { BatchFinanceReviewPayload, CustomerItem, FirstSalesListItem } from '../../types'
+import type { BatchFinanceReviewPayload, CustomerItem, DepartmentTreeItem, FirstSalesListItem } from '../../types'
 import CustomerTailPaymentDrawer from '../customers/CustomerTailPaymentDrawer.vue'
 import RefundCreateDialog from '../refund/RefundCreateDialog.vue'
 import FirstSalesCreateDrawer from './FirstSalesCreateDrawer.vue'
@@ -19,6 +20,8 @@ const refundSubmittingId = ref<number | null>(null)
 const refundDialogVisible = ref(false)
 const refundDraft = ref<any>(null)
 const orders = ref<FirstSalesListItem[]>([])
+const departmentOptions = ref<Array<{ id: number; name: string }>>([])
+const total = ref(0)
 const createDrawerVisible = ref(false)
 const createDrawerRef = ref<InstanceType<typeof FirstSalesCreateDrawer> | null>(null)
 const tailPaymentDrawerVisible = ref(false)
@@ -42,15 +45,29 @@ const filters = ref({
   paymentAccountName: '',
   paymentSerialNo: '',
   tailPaymentSerialNo: '',
+  departmentId: '',
+  financeReviewStatus: '',
+  timeRange: [] as string[],
 })
+
+const flattenDepartments = (items: DepartmentTreeItem[], prefix = ''): Array<{ id: number; name: string }> =>
+  items.flatMap((item) => {
+    const label = prefix ? `${prefix} / ${item.name}` : item.name
+    return [{ id: item.id, name: label }, ...flattenDepartments(item.children || [], label)]
+  })
 
 const orderTypeOptions = ['定金', '尾款', '全款']
 const paymentStatusOptions = ['已付清', '部分付款']
+const financeReviewPartitionOptions = [
+  { label: '全部', value: '' },
+  { label: '待审核', value: 'PENDING' },
+  { label: '已通过', value: 'APPROVED' },
+  { label: '已驳回', value: 'REJECTED' },
+]
 
 const formatDateTime = (value?: string) => value?.replace('T', ' ').slice(0, 19) || '-'
 const getPaymentTagType = (value: string) => (value === '已付清' ? 'success' : 'warning')
 const getStatusTagType = (value: string) => (value === '待补尾款' ? 'danger' : 'info')
-const getPriority = (item: FirstSalesListItem) => (item.currentStatus === '待补尾款' ? 0 : 1)
 const getFinanceReviewTagType = (status: FirstSalesListItem['financeReviewStatus']) => {
   if (status === 'APPROVED') {
     return 'success'
@@ -75,11 +92,23 @@ const canCreateRefund = () => hasPermission('refund.create')
 const loadOrders = async () => {
   loading.value = true
   try {
-    orders.value = await fetchFirstSalesOrders({
+    const result = await fetchFirstSalesOrders({
+      page: currentPage.value,
+      pageSize: pageSize.value,
+      customerName: filters.value.name || undefined,
+      phone: filters.value.phone || undefined,
+      firstSalesUserName: filters.value.salesUserName || undefined,
       paymentAccountName: filters.value.paymentAccountName || undefined,
       paymentSerialNo: filters.value.paymentSerialNo || undefined,
       tailPaymentSerialNo: filters.value.tailPaymentSerialNo || undefined,
+      paymentStatus: filters.value.paymentStatus === '已付清' ? 'PAID' : filters.value.paymentStatus === '部分付款' ? 'PARTIAL' : undefined,
+      departmentId: filters.value.departmentId || undefined,
+      financeReviewStatus: filters.value.financeReviewStatus || undefined,
+      startTime: filters.value.timeRange[0] || undefined,
+      endTime: filters.value.timeRange[1] || undefined,
     })
+    orders.value = result.items
+    total.value = result.total
   } finally {
     loading.value = false
   }
@@ -94,6 +123,14 @@ const openEditDrawer = async (order: FirstSalesListItem) => {
   await createDrawerRef.value?.openForEdit(order)
 }
 
+const loadDepartments = async () => {
+  if (!hasPermission('system.departments.view')) {
+    departmentOptions.value = []
+    return
+  }
+  departmentOptions.value = flattenDepartments(await fetchDepartmentTree())
+}
+
 const resetFilters = () => {
   filters.value.name = ''
   filters.value.phone = ''
@@ -104,6 +141,9 @@ const resetFilters = () => {
   filters.value.paymentAccountName = ''
   filters.value.paymentSerialNo = ''
   filters.value.tailPaymentSerialNo = ''
+  filters.value.departmentId = ''
+  filters.value.financeReviewStatus = ''
+  filters.value.timeRange = []
   currentPage.value = 1
   loadOrders()
 }
@@ -118,13 +158,17 @@ const hasActiveFilters = computed(() =>
     filters.value.currentStatus ||
     filters.value.paymentAccountName ||
     filters.value.paymentSerialNo ||
-    filters.value.tailPaymentSerialNo,
+    filters.value.tailPaymentSerialNo ||
+    filters.value.departmentId ||
+    filters.value.financeReviewStatus ||
+    filters.value.timeRange.length,
   ),
 )
 
 const applyPendingTailFilter = () => {
   filters.value.paymentStatus = '部分付款'
   filters.value.currentStatus = '待补尾款'
+  filters.value.financeReviewStatus = 'PENDING'
   currentPage.value = 1
   loadOrders()
 }
@@ -132,6 +176,12 @@ const applyPendingTailFilter = () => {
 const applyPaidFilter = () => {
   filters.value.paymentStatus = '已付清'
   filters.value.currentStatus = ''
+  currentPage.value = 1
+  loadOrders()
+}
+
+const applyFinancePartition = (status: string) => {
+  filters.value.financeReviewStatus = status
   currentPage.value = 1
   loadOrders()
 }
@@ -308,12 +358,12 @@ const handleBatchFinanceReview = async (action: BatchFinanceReviewPayload['actio
 }
 
 const exportOrders = () => {
-  if (!prioritizedOrders.value.length) {
+  if (!orders.value.length) {
     ElMessage.warning('当前没有可导出的业绩数据')
     return
   }
 
-  const sheetRows = prioritizedOrders.value.map((item) => ({
+  const sheetRows = orders.value.map((item) => ({
     客户编号: item.customerNo,
     客户姓名: item.name,
     手机号码: formatPhone(item.phone, item),
@@ -346,65 +396,19 @@ const exportOrders = () => {
   XLSX.writeFile(workbook, '一销业绩订单.xlsx')
 }
 
-const filteredOrders = computed(() =>
-  orders.value.filter((item) => {
-    if (filters.value.name && !item.name.includes(filters.value.name)) {
-      return false
-    }
-    if (filters.value.phone && !item.phone.includes(filters.value.phone)) {
-      return false
-    }
-    if (filters.value.salesUserName && !(item.salesUserName || '').includes(filters.value.salesUserName)) {
-      return false
-    }
-    if (filters.value.orderType && item.orderType !== filters.value.orderType) {
-      return false
-    }
-    if (filters.value.paymentStatus && item.paymentStatus !== filters.value.paymentStatus) {
-      return false
-    }
-    if (filters.value.currentStatus && item.currentStatus !== filters.value.currentStatus) {
-      return false
-    }
-    return true
-  }),
-)
-
-const prioritizedOrders = computed(() =>
-  [...filteredOrders.value].sort((a, b) => {
-    const priorityDiff = getPriority(a) - getPriority(b)
-    if (priorityDiff !== 0) {
-      return priorityDiff
-    }
-
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  }),
-)
-
-const paginatedOrders = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  return prioritizedOrders.value.slice(start, start + pageSize.value)
-})
-
-watch(prioritizedOrders, (value) => {
-  const totalPages = Math.max(1, Math.ceil(value.length / pageSize.value))
-  if (currentPage.value > totalPages) {
-    currentPage.value = totalPages
-  }
-}, { immediate: true })
-
 watch(pageSize, () => {
   currentPage.value = 1
+  loadOrders()
 })
 
 watch(currentPage, () => {
-  const totalPages = Math.max(1, Math.ceil(prioritizedOrders.value.length / pageSize.value))
-  if (currentPage.value > totalPages) {
-    currentPage.value = totalPages
-  }
+  loadOrders()
 })
 
-onMounted(loadOrders)
+onMounted(async () => {
+  await loadDepartments()
+  await loadOrders()
+})
 </script>
 
 <template>
@@ -427,6 +431,10 @@ onMounted(loadOrders)
               <el-space wrap>
                 <el-button @click="applyPendingTailFilter">只看待补尾款</el-button>
                 <el-button @click="applyPaidFilter">只看已付清</el-button>
+                <el-button @click="applyFinancePartition('PENDING')">待审核</el-button>
+                <el-button @click="applyFinancePartition('APPROVED')">已通过</el-button>
+                <el-button @click="applyFinancePartition('REJECTED')">已驳回</el-button>
+                <el-button @click="applyFinancePartition('')">全部审核</el-button>
                 <el-button @click="resetFilters">清空快捷筛选</el-button>
               </el-space>
             </div>
@@ -446,8 +454,23 @@ onMounted(loadOrders)
               <el-form-item label="付款单号">
                 <el-input v-model="filters.paymentSerialNo" placeholder="请输入付款单号" clearable />
               </el-form-item>
-              <el-form-item label="尾款单号">
-                <el-input v-model="filters.tailPaymentSerialNo" placeholder="请输入尾款单号" clearable />
+              <el-form-item label="部门">
+                <el-select v-model="filters.departmentId" placeholder="全部部门" clearable filterable style="width: 180px">
+                  <el-option v-for="item in departmentOptions" :key="item.id" :label="item.name" :value="String(item.id)" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="时间范围">
+                <el-date-picker
+                  v-model="filters.timeRange"
+                  type="datetimerange"
+                  range-separator="至"
+                  start-placeholder="开始时间"
+                  end-placeholder="结束时间"
+                  value-format="YYYY-MM-DDTHH:mm:ss"
+                />
+              </el-form-item>
+              <el-form-item label="审核分区">
+                <el-segmented v-model="filters.financeReviewStatus" :options="financeReviewPartitionOptions" />
               </el-form-item>
               <el-form-item label="成交类型">
                 <el-select v-model="filters.orderType" placeholder="全部" clearable style="width: 140px">
@@ -475,6 +498,9 @@ onMounted(loadOrders)
           <div class="page-stack-sm">
             <el-alert title="这里固定展示已产生过的一销订单，客户后续流转到二销、法务、调解或三销后，历史订单仍会保留在列表中。" type="info" :closable="false" show-icon />
             <el-alert v-if="hasActiveFilters" title="当前已启用筛选条件，若看不到历史订单请先点击“重置”或“清空快捷筛选”。" type="warning" :closable="false" show-icon />
+            <el-alert v-if="filters.financeReviewStatus === 'PENDING'" title="当前仅显示待审核订单。" type="warning" :closable="false" show-icon />
+            <el-alert v-else-if="filters.financeReviewStatus === 'APPROVED'" title="当前仅显示已通过订单。" type="success" :closable="false" show-icon />
+            <el-alert v-else-if="filters.financeReviewStatus === 'REJECTED'" title="当前仅显示已驳回订单。" type="error" :closable="false" show-icon />
             <el-alert title="列表已按 待补尾款优先 → 最新录入优先 排序" type="warning" :closable="false" show-icon />
             <el-space wrap>
               <el-button v-if="canCreateFirstSales()" type="primary" @click="openCreateDrawer">录入业绩</el-button>
@@ -483,7 +509,7 @@ onMounted(loadOrders)
               <el-button v-if="canBatchReviewFirstSales()" type="warning" :loading="reviewLoading" @click="handleBatchFinanceReview('REJECT')">批量驳回</el-button>
               <el-button v-if="canDeleteFirstSales()" type="danger" :loading="actionLoading" @click="handleBatchDeleteOrders">批量删除业绩</el-button>
             </el-space>
-            <el-table ref="orderTableRef" v-loading="loading" :data="paginatedOrders" :row-class-name="getRowClassName" @selection-change="handleSelectionChange">
+            <el-table ref="orderTableRef" v-loading="loading" :data="orders" :row-class-name="getRowClassName" @selection-change="handleSelectionChange">
               <el-table-column type="selection" width="55" />
               <el-table-column label="录单时间" min-width="180">
                 <template #default="scope">
@@ -575,7 +601,7 @@ onMounted(loadOrders)
                 v-model:current-page="currentPage"
                 v-model:page-size="pageSize"
                 :page-sizes="pageSizeOptions"
-                :total="prioritizedOrders.length"
+                :total="total"
                 layout="total, sizes, prev, pager, next, jumper"
                 background
               />

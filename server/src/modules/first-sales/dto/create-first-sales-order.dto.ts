@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer'
-import { IsBooleanString, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator'
+import { IsBooleanString, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Min } from 'class-validator'
 
 export enum FirstOrderTypeDto {
   DEPOSIT = 'DEPOSIT',
@@ -14,6 +14,7 @@ export class CreateFirstSalesOrderDto {
 
   @IsString()
   @IsNotEmpty()
+  @Matches(/^\d{11}$/, { message: '客户手机号必须为11位数字' })
   phone: string
 
   @IsOptional()

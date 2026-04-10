@@ -8,12 +8,13 @@ import { PaymentAccountsModule } from '../payment-accounts/payment-accounts.modu
 import { CourtConfigModule } from '../court-config/court-config.module'
 import { DingTalkReportModule } from '../dingtalk-report/dingtalk-report.module'
 import { FilesModule } from '../files/files.module'
+import { PaymentSerialValidatorService } from '../../common/services/payment-serial-validator.service'
 import { SecondSalesController } from './second-sales.controller'
 import { SecondSalesService } from './second-sales.service'
 
 @Module({
   imports: [PrismaModule, AuthModule, CustomersModule, DashboardModule, DepartmentsModule, PaymentAccountsModule, CourtConfigModule, DingTalkReportModule, FilesModule],
   controllers: [SecondSalesController],
-  providers: [SecondSalesService],
+  providers: [SecondSalesService, PaymentSerialValidatorService],
 })
 export class SecondSalesModule {}
