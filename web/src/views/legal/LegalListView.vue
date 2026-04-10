@@ -21,9 +21,9 @@ const canOperateLegal = () => canEditLegal() || canAssignLegal() || canReviewFil
 const canOnlyEditLegalBaseFields = () => canEditLegal() && !canAssignLegal() && !canReviewFiling() && !canHandlePreTrial() && !canCloseLegal()
 
 const stageOptions: Array<{ label: string; value: LegalCaseStage }> = [
-  { label: '鍔╃悊闃舵', value: 'ASSISTANT' },
-  { label: '绔嬫涓撳憳闃舵', value: 'FILING_SPECIALIST' },
-  { label: '搴墠闃舵', value: 'PRE_TRIAL' },
+  { label: '助理阶段', value: 'ASSISTANT' },
+  { label: '立案专员阶段', value: 'FILING_SPECIALIST' },
+  { label: '庭前阶段', value: 'PRE_TRIAL' },
   { label: '已结案', value: 'CLOSED' },
 ]
 
@@ -62,9 +62,9 @@ const activeCase = ref<LegalCaseItem | null>(null)
 const legalUsers = computed(() => users.value.filter((item) => ['SUPER_ADMIN', 'LEGAL_MANAGER', 'LEGAL'].includes(item.roleCode || '')))
 
 const stageLabelMap: Record<LegalCaseStage, string> = {
-  ASSISTANT: '鍔╃悊闃舵',
-  FILING_SPECIALIST: '绔嬫涓撳憳闃舵',
-  PRE_TRIAL: '搴墠闃舵',
+  ASSISTANT: '助理阶段',
+  FILING_SPECIALIST: '立案专员阶段',
+  PRE_TRIAL: '庭前阶段',
   CLOSED: '已结案',
 }
 
@@ -141,23 +141,23 @@ const quickCreateRefund = async (item: LegalCaseItem) => {
   }
 }
 
-const canShowTransfer = (item: LegalCaseItem) => canTransferLegal() && item.stage === 'CLOSED' && item.isCompleted && item.filingApproved && item.filingReviewed && item.transferredToPreTrial && item.currentStatus === '寰呰浆涓夐攢'
+const canShowTransfer = (item: LegalCaseItem) => canTransferLegal() && item.stage === 'CLOSED' && item.isCompleted && item.filingApproved && item.filingReviewed && item.transferredToPreTrial && item.currentStatus === '待转三销'
 
 const legalActionLabel = computed(() => {
-  if (canCloseLegal()) return '缁撴澶勭悊'
-  if (canHandlePreTrial()) return '搴墠澶勭悊'
-  if (canReviewFiling()) return '绔嬫瀹℃牳'
-  if (canAssignLegal()) return '鍒嗘淳鍔炵悊'
-  if (canEditLegal()) return '璺熻繘璁板綍'
-  return '鏌ョ湅璇︽儏'
+  if (canCloseLegal()) return '结案处理'
+  if (canHandlePreTrial()) return '庭前处理'
+  if (canReviewFiling()) return '立案审核'
+  if (canAssignLegal()) return '分派办理'
+  if (canEditLegal()) return '跟进记录'
+  return '查看详情'
 })
 
 const legalActionTip = computed(() => {
-  if (canCloseLegal()) return '鍙鐞嗙粨妗堢粨鏋滐紝骞惰ˉ鍏呮硶鍔″叏娴佺▼淇℃伅'
+  if (canCloseLegal()) return '可处理结案结果，并补充法务全流程信息'
   if (canHandlePreTrial()) return '可办理庭前阶段，并维护前序法务信息'
-  if (canReviewFiling()) return '鍙鏍歌祫鏂欍€佹爣璁扮珛妗堥€氳繃锛屽苟缁存姢鍓嶅簭娉曞姟淇℃伅'
-  if (canAssignLegal()) return '鍙垎娲惧姪鐞嗐€佺珛妗堜笓鍛樸€佸涵鍓嶈礋璐ｄ汉锛屽苟缁存姢妗堜欢杩涘害'
-  if (canEditLegal()) return '鍙櫥璁版湰浜鸿礋璐ｇ殑娉曞姟璺熻繘淇℃伅'
+  if (canReviewFiling()) return '可审核资料、标记立案通过，并维护前序法务信息'
+  if (canAssignLegal()) return '可分派助理、立案专员、庭前负责人，并维护案件进度'
+  if (canEditLegal()) return '可登记本人负责的法务跟进信息'
   return '可查看法务案件详情'
 })
 
@@ -165,7 +165,7 @@ const transferToThirdSales = async (item: LegalCaseItem) => {
   transferringId.value = item.customerId
   try {
     await transferLegalCaseToThirdSales(item.customerId)
-    ElMessage.success('宸茶浆鍏ヤ笁閿€鎺ュ緟')
+    ElMessage.success('已转入三销接待')
     await loadData()
   } finally {
     transferringId.value = null
