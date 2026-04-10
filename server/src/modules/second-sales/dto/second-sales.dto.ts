@@ -58,8 +58,8 @@ export class CreateSecondSalesOrderDto {
   @IsNotEmpty()
   paymentSerialNo: string
 
-  @IsIn(['LEGAL', 'THIRD_SALES'])
-  nextStage: 'LEGAL' | 'THIRD_SALES'
+  @IsIn(['LEGAL'])
+  nextStage: 'LEGAL'
 
   @IsOptional()
   @IsDateString()

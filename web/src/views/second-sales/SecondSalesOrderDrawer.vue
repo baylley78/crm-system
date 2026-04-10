@@ -144,7 +144,7 @@ const fillFormForEdit = (order: SecondSalesOrderListItem) => {
   form.includesHearing = order.includesHearing
   form.paymentAccountId = order.paymentAccountId || paymentAccounts.value[0]?.id || undefined
   form.paymentSerialNo = order.paymentSerialNo || ''
-  form.nextStage = order.currentStatus === 'PENDING_THIRD_SALES' ? 'THIRD_SALES' : 'LEGAL'
+  form.nextStage = 'LEGAL'
   form.orderDate = order.orderDate ? order.orderDate.slice(0, 16) : ''
   form.caseType = ''
   form.source = ''
@@ -250,7 +250,7 @@ const openForTailPayment = async (order: SecondSalesOrderListItem, payload: Seco
   form.includesHearing = order.includesHearing
   paymentAmountText.value = String(payload.secondPaymentAmount || 0)
   form.paymentSerialNo = payload.paymentSerialNo
-  form.nextStage = payload.nextStage
+  form.nextStage = 'LEGAL'
   form.remark = payload.remark || ''
   form.paymentScreenshot = null
   form.chatRecordFile = null
@@ -597,11 +597,8 @@ defineExpose({ openForCustomer, openForEdit, openForTailPayment })
           </el-form-item>
 
           <el-form-item label="成功后流转">
-            <el-radio-group v-model="form.nextStage" :disabled="form.orderType === 'DEPOSIT'">
-              <el-radio value="LEGAL">转法务</el-radio>
-              <el-radio value="THIRD_SALES">转三销</el-radio>
-            </el-radio-group>
-            <div class="upload-tip">{{ form.orderType === 'DEPOSIT' ? '定金单不提前流转，待后续补尾款后再流转。' : `当前为${orderTypeLabelMap[form.orderType]}单，保存后按所选节点流转。` }}</div>
+            <el-input model-value="转法务" disabled />
+            <div class="upload-tip">当前为{{ orderTypeLabelMap[form.orderType] }}单，保存后会自动转入法务。</div>
           </el-form-item>
 
           <el-form-item v-if="canEditOrderTime()" label="录单时间">

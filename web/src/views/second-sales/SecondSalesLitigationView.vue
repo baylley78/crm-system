@@ -135,7 +135,7 @@ const openTailPaymentDrawer = async (order: SecondSalesOrderListItem) => {
     includesHearing: order.includesHearing,
     paymentAccountId: order.paymentAccountId,
     paymentSerialNo: '',
-    nextStage: order.currentStatus === '待转三销' ? 'THIRD_SALES' : 'LEGAL',
+    nextStage: 'LEGAL',
     customerName: order.customerName,
     remark: order.remark,
     paymentScreenshot: null,

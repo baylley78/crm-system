@@ -152,12 +152,12 @@ export class SecondSalesService {
     return arrearsAmount > 0 ? 'PARTIAL' : 'PAID'
   }
 
-  private resolveCurrentStatus(orderType: CreateSecondSalesOrderDto['orderType'], nextStage: CreateSecondSalesOrderDto['nextStage'], arrearsAmount: number) {
+  private resolveCurrentStatus(orderType: CreateSecondSalesOrderDto['orderType'], arrearsAmount: number) {
     if (orderType === 'DEPOSIT' || arrearsAmount > 0) {
       return CustomerStatus.SECOND_SALES_FOLLOWING
     }
 
-    return nextStage === 'THIRD_SALES' ? CustomerStatus.PENDING_THIRD_SALES : CustomerStatus.PENDING_LEGAL
+    return CustomerStatus.PENDING_LEGAL
   }
 
   async createOrder(
@@ -199,7 +199,7 @@ export class SecondSalesService {
       ? JSON.stringify(files.evidenceFiles.map((file) => `/uploads/${file.filename}`))
       : undefined
     const orderDate = this.resolveOrderDate(currentUser, dto.orderDate)
-    const nextStatus = this.resolveCurrentStatus(dto.orderType, dto.nextStage, arrearsAmount)
+    const nextStatus = this.resolveCurrentStatus(dto.orderType, arrearsAmount)
 
     if (!paymentScreenshotUrl) {
       throw new BadRequestException('请上传付款截图')
@@ -240,12 +240,13 @@ export class SecondSalesService {
         where: { id: customer.id },
         data: {
           secondSalesUserId: dto.secondSalesUserId,
-          currentOwnerId: nextStatus === CustomerStatus.PENDING_THIRD_SALES ? dto.secondSalesUserId : customer.legalUserId,
+          legalUserId: customer.legalUserId ?? dto.secondSalesUserId,
+          currentOwnerId: nextStatus === CustomerStatus.PENDING_LEGAL ? customer.legalUserId ?? dto.secondSalesUserId : dto.secondSalesUserId,
           secondPaymentAmount: { increment: dto.secondPaymentAmount },
           totalPaymentAmount: { increment: dto.secondPaymentAmount },
           arrearsAmount: Math.max(Number(customer.arrearsAmount) - dto.secondPaymentAmount, 0),
           currentStatus: nextStatus,
-          thirdSalesSourceStage: nextStatus === CustomerStatus.PENDING_THIRD_SALES ? 'SECOND_SALES' : null,
+          thirdSalesSourceStage: null,
         },
       })
 
@@ -311,7 +312,7 @@ export class SecondSalesService {
       ? JSON.stringify(files.evidenceFiles.map((file) => `/uploads/${file.filename}`))
       : order.evidenceFileUrls
     const orderDate = this.resolveOrderDate(currentUser, dto.orderDate, order.orderDate)
-    const nextStatus = this.resolveCurrentStatus(dto.orderType, dto.nextStage, arrearsAmount)
+    const nextStatus = this.resolveCurrentStatus(dto.orderType, arrearsAmount)
 
     if (!paymentScreenshotUrl) {
       throw new BadRequestException('请上传付款截图')
@@ -330,12 +331,13 @@ export class SecondSalesService {
         where: { id: customer.id },
         data: {
           secondSalesUserId: dto.secondSalesUserId,
-          currentOwnerId: nextStatus === CustomerStatus.PENDING_THIRD_SALES ? dto.secondSalesUserId : customer.legalUserId,
+          legalUserId: customer.legalUserId ?? dto.secondSalesUserId,
+          currentOwnerId: nextStatus === CustomerStatus.PENDING_LEGAL ? customer.legalUserId ?? dto.secondSalesUserId : dto.secondSalesUserId,
           secondPaymentAmount: nextSecondPaymentAmount,
           totalPaymentAmount: nextTotalPaymentAmount,
           arrearsAmount: nextCustomerArrearsAmount,
           currentStatus: nextStatus,
-          thirdSalesSourceStage: nextStatus === CustomerStatus.PENDING_THIRD_SALES ? 'SECOND_SALES' : null,
+          thirdSalesSourceStage: null,
         },
       })
 

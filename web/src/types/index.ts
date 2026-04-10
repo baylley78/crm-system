@@ -1253,7 +1253,7 @@ export interface SecondSalesOrderPayload {
   includesHearing: boolean
   paymentAccountId?: number
   paymentSerialNo: string
-  nextStage: 'LEGAL' | 'THIRD_SALES'
+  nextStage: 'LEGAL'
   orderDate?: string
   customerName?: string
   caseType?: string
