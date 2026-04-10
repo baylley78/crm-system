@@ -28,6 +28,15 @@ const stageOptions: Array<{ label: string; value: LegalCaseStage }> = [
   { label: '已结案', value: 'CLOSED' },
 ]
 
+const stageQuickOptions: Array<{ label: string; value: LegalCaseStage | '' }> = [
+  { label: '全部客户', value: '' },
+  { label: '待分配', value: 'PENDING_ASSIGNMENT' },
+  { label: '助理', value: 'ASSISTANT' },
+  { label: '立案专员', value: 'FILING_SPECIALIST' },
+  { label: '庭前', value: 'PRE_TRIAL' },
+  { label: '已结案', value: 'CLOSED' },
+]
+
 const loading = ref(false)
 const saving = ref(false)
 const transferringId = ref<number | null>(null)
@@ -238,11 +247,12 @@ const openAttachment = (url?: string) => {
       <template #header>法务系统</template>
       <div class="legal-layout">
         <el-card shadow="never" class="legal-list-card">
-          <div class="legal-filters">
-            <el-select v-model="selectedStage" clearable placeholder="按法务阶段筛选" style="width: 220px" @change="handleStageChange">
-              <el-option v-for="option in stageOptions" :key="option.value" :label="option.label" :value="option.value" />
-            </el-select>
-          </div>
+          <template #header>
+            <div class="card-header-row">
+              <span>法务客户列表</span>
+              <el-segmented v-model="selectedStage" :options="stageQuickOptions" @change="handleStageChange" />
+            </div>
+          </template>
           <el-table v-loading="loading" :data="paginatedCases" highlight-current-row @current-change="selectCase" @row-click="selectCase">
             <el-table-column label="客户编号" prop="customerNo" min-width="150" />
             <el-table-column label="客户姓名" prop="name" min-width="120" />
@@ -578,9 +588,7 @@ const openAttachment = (url?: string) => {
 }
 
 .legal-filters {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 12px;
+  display: none;
 }
 
 .sales-section-card {
