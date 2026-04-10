@@ -10,6 +10,7 @@ import type { MediationCaseItem, SalesUserOption, SaveMediationCasePayload } fro
 import RefundCreateDialog from '../refund/RefundCreateDialog.vue'
 
 const canEditMediation = () => hasPermission('mediation.edit')
+const canAssignMediation = () => hasPermission('mediation.edit') || hasPermission('mediation.complete')
 const canEditMediationTime = () => hasPermission('mediation.time.edit')
 const canCompleteMediation = () => hasPermission('mediation.complete')
 const canCreateRefund = () => hasPermission('refund.create')
@@ -292,7 +293,8 @@ onMounted(async () => {
             <el-table-column label="操作" min-width="220" fixed="right">
               <template #default="scope">
                 <div class="action-cell compact-action-cell">
-                  <el-button v-if="canEditMediation()" type="primary" link @click.stop="openActionDialog(scope.row, 'FOLLOW')">{{ canPendingStatus(scope.row.currentStatus) ? '分配跟进' : '跟进' }}</el-button>
+                  <el-button v-if="canPendingStatus(scope.row.currentStatus) && canAssignMediation()" type="primary" link @click.stop="openActionDialog(scope.row, 'FOLLOW')">分配跟进</el-button>
+                  <el-button v-else-if="canEditMediation()" type="primary" link @click.stop="openActionDialog(scope.row, 'FOLLOW')">跟进</el-button>
                   <el-button v-if="canCompleteMediation()" type="success" link :disabled="scope.row.isCompleted" @click.stop="openActionDialog(scope.row, 'COMPLETE')">完结</el-button>
                   <el-button v-if="canCreateRefund()" type="danger" link :loading="refundingId === scope.row.customerId" @click.stop="quickCreateRefund(scope.row)">申请退款</el-button>
                   <el-tooltip v-if="canDeleteCustomers()" content="删除客户" placement="top">
