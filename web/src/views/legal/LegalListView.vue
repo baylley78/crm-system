@@ -35,6 +35,7 @@ const cases = ref<LegalCaseItem[]>([])
 const total = ref(0)
 const users = ref<SalesUserOption[]>([])
 const dialogVisible = ref(false)
+const detailVisible = ref(false)
 const refundDialogVisible = ref(false)
 const refundDraft = ref<CreateRefundCasePayload | null>(null)
 const form = reactive<SaveLegalCasePayload>({
@@ -80,9 +81,10 @@ const loadData = async () => {
     total.value = casePage.total
     users.value = (userList as SalesUserOption[] | undefined) || []
     if (activeCase.value) {
-      activeCase.value = cases.value.find((item) => item.customerId === activeCase.value?.customerId) || cases.value[0] || null
-    } else {
-      activeCase.value = cases.value[0] || null
+      activeCase.value = cases.value.find((item) => item.customerId === activeCase.value?.customerId) || activeCase.value
+      if (!cases.value.some((item) => item.customerId === activeCase.value?.customerId)) {
+        detailVisible.value = false
+      }
     }
   } finally {
     loading.value = false
@@ -196,6 +198,7 @@ const paginatedCases = computed(() => {
 
 const selectCase = (item: LegalCaseItem | null) => {
   activeCase.value = item
+  detailVisible.value = Boolean(item)
 }
 
 const handleStageChange = async () => {
@@ -268,10 +271,19 @@ const openAttachment = (url?: string) => {
             />
           </div>
         </el-card>
+      </div>
+    </el-card>
 
-        <el-card shadow="never" class="legal-detail-card">
-          <template #header>客户情况、岗位流转与上游证据</template>
-          <template v-if="activeCase">
+    <el-drawer
+      v-model="detailVisible"
+      :title="activeCase ? `客户详情 - ${activeCase.name}` : '客户详情'"
+      size="70%"
+      destroy-on-close
+    >
+      <template v-if="activeCase">
+        <div class="page-stack-sm legal-detail-drawer-body">
+          <el-card shadow="never">
+            <template #header>客户情况、岗位流转与上游证据</template>
             <div class="page-stack-sm">
               <el-descriptions :column="1" border>
                 <el-descriptions-item label="当前法务阶段">{{ formatStage(activeCase.stage) }}</el-descriptions-item>
@@ -423,11 +435,11 @@ const openAttachment = (url?: string) => {
                 </div>
               </div>
             </div>
-          </template>
-          <el-empty v-else description="请选择法务案件" />
-        </el-card>
-      </div>
-    </el-card>
+          </el-card>
+        </div>
+      </template>
+      <el-empty v-else description="请选择法务案件" />
+    </el-drawer>
 
     <el-dialog v-model="dialogVisible" title="处理法务案件" width="720px">
       <el-form label-width="130px" class="form-grid">
@@ -515,13 +527,10 @@ const openAttachment = (url?: string) => {
 }
 
 .legal-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
-  gap: 14px;
+  display: block;
 }
 
-.legal-list-card,
-.legal-detail-card {
+.legal-list-card {
   min-width: 0;
 }
 
@@ -593,5 +602,9 @@ const openAttachment = (url?: string) => {
   display: flex;
   align-items: center;
   color: var(--el-text-color-primary);
+}
+
+.legal-detail-drawer-body {
+  padding-right: 8px;
 }
 </style>
