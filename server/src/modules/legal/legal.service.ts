@@ -208,6 +208,7 @@ export class LegalService {
     const latestCase = customer.legalCases[0]
     this.assertSavePermissions(currentUser, dto, latestCase)
 
+    const legalOwnerId = latestCase?.legalUserId ?? customer.legalUserId ?? customer.currentOwnerId ?? currentUser.id
     const startDate = this.resolveStartDate(currentUser, dto.startDate, latestCase?.startDate)
     const stage = dto.stage ?? latestCase?.stage ?? LegalCaseStage.ASSISTANT
     const assistantCollected = dto.assistantCollected ?? latestCase?.assistantCollected ?? false
@@ -227,7 +228,7 @@ export class LegalService {
 
     await this.prisma.$transaction(async (tx) => {
       const casePayload = {
-        legalUserId: currentUser.id,
+        legalUserId: legalOwnerId,
         progressStatus: dto.progressStatus,
         caseResult: dto.caseResult,
         remark: dto.remark,
@@ -284,8 +285,8 @@ export class LegalService {
       await tx.customer.update({
         where: { id: dto.customerId },
         data: {
-          legalUserId: currentUser.id,
-          currentOwnerId: currentUser.id,
+          legalUserId: legalOwnerId,
+          currentOwnerId: legalOwnerId,
           currentStatus: nextStatus,
           thirdSalesSourceStage: filingApproved ? 'LEGAL' : null,
         },

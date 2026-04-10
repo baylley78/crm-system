@@ -17,6 +17,52 @@ import { CreateSecondSalesOrderDto } from './dto/second-sales.dto'
 export class SecondSalesService {
   private readonly timeEditPermission = 'secondSales.time.edit'
 
+  private async ensureLegalCaseExists(
+    tx: Prisma.TransactionClient,
+    customer: {
+      id: number
+      legalUserId: number | null
+    },
+    remark?: string,
+    fallbackLegalUserId?: number,
+  ) {
+    const latestLegalCase = await tx.legalCase.findFirst({
+      where: { customerId: customer.id },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (latestLegalCase) {
+      return latestLegalCase
+    }
+
+    const legalUserId = customer.legalUserId ?? fallbackLegalUserId
+    if (!legalUserId) {
+      throw new BadRequestException('请先分配法务负责人后再转入法务')
+    }
+
+    return tx.legalCase.create({
+      data: {
+        customerId: customer.id,
+        legalUserId,
+        progressStatus: '待接案',
+        caseResult: '',
+        remark,
+        startDate: new Date(),
+        isCompleted: false,
+        filingApproved: false,
+        stage: 'ASSISTANT',
+        assistantCollected: false,
+        assistantDocumented: false,
+        archiveNeeded: false,
+        archiveCompleted: false,
+        filingReviewed: false,
+        transferredToPreTrial: false,
+        closeResult: '',
+        acceptedAt: new Date(),
+      },
+    })
+  }
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly customersService: CustomersService,
@@ -194,7 +240,7 @@ export class SecondSalesService {
         where: { id: customer.id },
         data: {
           secondSalesUserId: dto.secondSalesUserId,
-          currentOwnerId: nextStatus === CustomerStatus.PENDING_THIRD_SALES ? dto.secondSalesUserId : customer.legalUserId ?? dto.secondSalesUserId,
+          currentOwnerId: nextStatus === CustomerStatus.PENDING_THIRD_SALES ? dto.secondSalesUserId : customer.legalUserId,
           secondPaymentAmount: { increment: dto.secondPaymentAmount },
           totalPaymentAmount: { increment: dto.secondPaymentAmount },
           arrearsAmount: Math.max(Number(customer.arrearsAmount) - dto.secondPaymentAmount, 0),
@@ -203,35 +249,8 @@ export class SecondSalesService {
         },
       })
 
-      if (nextStatus === CustomerStatus.PENDING_LEGAL && customer.legalUserId) {
-        const latestLegalCase = await tx.legalCase.findFirst({
-          where: { customerId: customer.id },
-          orderBy: { createdAt: 'desc' },
-        })
-
-        if (!latestLegalCase) {
-          await tx.legalCase.create({
-            data: {
-              customerId: customer.id,
-              legalUserId: customer.legalUserId,
-              progressStatus: '待接案',
-              caseResult: '',
-              remark: dto.remark,
-              startDate: new Date(),
-              isCompleted: false,
-              filingApproved: false,
-              stage: 'ASSISTANT',
-              assistantCollected: false,
-              assistantDocumented: false,
-              archiveNeeded: false,
-              archiveCompleted: false,
-              filingReviewed: false,
-              transferredToPreTrial: false,
-              closeResult: '',
-              acceptedAt: new Date(),
-            },
-          })
-        }
+      if (nextStatus === CustomerStatus.PENDING_LEGAL) {
+        await this.ensureLegalCaseExists(tx, customer, dto.remark, dto.secondSalesUserId)
       }
 
       return order.id
@@ -311,7 +330,7 @@ export class SecondSalesService {
         where: { id: customer.id },
         data: {
           secondSalesUserId: dto.secondSalesUserId,
-          currentOwnerId: nextStatus === CustomerStatus.PENDING_LEGAL || nextStatus === CustomerStatus.PENDING_THIRD_SALES ? dto.secondSalesUserId : customer.currentOwnerId,
+          currentOwnerId: nextStatus === CustomerStatus.PENDING_THIRD_SALES ? dto.secondSalesUserId : customer.legalUserId,
           secondPaymentAmount: nextSecondPaymentAmount,
           totalPaymentAmount: nextTotalPaymentAmount,
           arrearsAmount: nextCustomerArrearsAmount,
@@ -319,6 +338,10 @@ export class SecondSalesService {
           thirdSalesSourceStage: nextStatus === CustomerStatus.PENDING_THIRD_SALES ? 'SECOND_SALES' : null,
         },
       })
+
+      if (nextStatus === CustomerStatus.PENDING_LEGAL) {
+        await this.ensureLegalCaseExists(tx, customer, dto.remark, dto.secondSalesUserId)
+      }
 
       return tx.secondSalesOrder.update({
         where: { id },
