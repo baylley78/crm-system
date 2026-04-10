@@ -131,8 +131,8 @@ export class SecondSalesService {
     return arrearsAmount > 0 ? 'PARTIAL' : 'PAID'
   }
 
-  private resolveCurrentStatus(orderType: CreateSecondSalesOrderDto['orderType'], arrearsAmount: number) {
-    if (orderType === 'DEPOSIT' || arrearsAmount > 0) {
+  private resolveCurrentStatus(orderType: CreateSecondSalesOrderDto['orderType'], _arrearsAmount: number) {
+    if (orderType === 'DEPOSIT') {
       return CustomerStatus.SECOND_SALES_FOLLOWING
     }
 
