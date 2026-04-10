@@ -209,23 +209,78 @@ const handleDialogClosed = () => {
   resetForm()
 }
 
+const isActionDirty = () => {
+  if (!editingCase.value) {
+    return false
+  }
+
+  return form.progressStatus !== (editingCase.value.progressStatus || (canPendingStatus(editingCase.value.currentStatus) ? '待接手' : '调解处理中'))
+    || form.mediationResult !== (editingCase.value.mediationResult || '')
+    || form.remark !== (editingCase.value.remark || '')
+    || form.startDate !== (editingCase.value.startDate ? editingCase.value.startDate.slice(0, 16) : '')
+    || form.ownerId !== editingCase.value.ownerId
+    || (form.evidenceFiles?.length || 0) > 0
+}
+
+const handleDialogClose = async (done: () => void) => {
+  if (saving.value) {
+    return
+  }
+
+  if (!isActionDirty()) {
+    done()
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm('确认关闭将丢失未保存的调解内容，是否继续？', '提示', {
+      type: 'warning',
+      confirmButtonText: '确认关闭',
+      cancelButtonText: '继续填写',
+    })
+    done()
+  } catch {
+    return
+  }
+}
+
 const submit = async () => {
   if (!form.customerId) {
     ElMessage.warning('请先选择调解案件')
     return
   }
 
+  if (!form.ownerId) {
+    ElMessage.warning('请选择调解负责人')
+    return
+  }
+
+  if (!form.progressStatus.trim()) {
+    ElMessage.warning('请输入调解进度')
+    return
+  }
+
   saving.value = true
   try {
+    const payload = {
+      ...form,
+      progressStatus: form.progressStatus.trim(),
+      mediationResult: form.mediationResult?.trim(),
+      remark: form.remark?.trim(),
+      isCompleted: actionType.value === 'COMPLETE',
+    }
+
     if (actionType.value === 'COMPLETE') {
-      await completeMediationCase(form)
+      await completeMediationCase(payload)
       ElMessage.success('调解已完结')
     } else {
-      await followMediationCase(form)
+      await followMediationCase(payload)
       ElMessage.success(canPendingStatus(editingCase.value?.currentStatus || '') ? '已接手并进入调解处理中' : '调解跟进已提交')
     }
     actionDialogVisible.value = false
     await loadData()
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || error?.message || '调解提交失败')
   } finally {
     saving.value = false
   }
@@ -406,9 +461,31 @@ onMounted(async () => {
       v-model="actionDialogVisible"
       :title="actionType === 'COMPLETE' ? '完结调解' : canPendingStatus(editingCase?.currentStatus || '') ? '分配调解人员并跟进' : '调解跟进'"
       width="720px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :before-close="handleDialogClose"
       @closed="handleDialogClosed"
     >
       <el-form label-width="120px" class="page-stack">
+        <el-card v-if="editingCase" shadow="never" class="summary-card">
+          <template #header>
+            <div class="section-title">客户信息摘要</div>
+          </template>
+          <div class="customer-summary-grid">
+            <div class="summary-item"><span class="summary-label">客户编号</span><span class="summary-value">{{ editingCase.customerNo || '-' }}</span></div>
+            <div class="summary-item"><span class="summary-label">客户姓名</span><span class="summary-value">{{ editingCase.name || '-' }}</span></div>
+            <div class="summary-item"><span class="summary-label">手机号码</span><span class="summary-value">{{ formatPhone(editingCase.phone, editingCase) }}</span></div>
+            <div class="summary-item"><span class="summary-label">案件类型</span><span class="summary-value">{{ editingCase.caseType || '-' }}</span></div>
+            <div class="summary-item"><span class="summary-label">客户来源</span><span class="summary-value">{{ editingCase.source || '-' }}</span></div>
+            <div class="summary-item"><span class="summary-label">意向等级</span><span class="summary-value">{{ editingCase.intentionLevel || '-' }}</span></div>
+            <div class="summary-item"><span class="summary-label">一销人员</span><span class="summary-value">{{ editingCase.firstSalesUserName || '-' }}</span></div>
+            <div class="summary-item"><span class="summary-label">二销人员</span><span class="summary-value">{{ editingCase.secondSalesUserName || '-' }}</span></div>
+            <div class="summary-item"><span class="summary-label">一销付款</span><span class="summary-value">{{ editingCase.firstPaymentAmount || 0 }}</span></div>
+            <div class="summary-item"><span class="summary-label">二销付款</span><span class="summary-value">{{ editingCase.secondPaymentAmount || 0 }}</span></div>
+            <div class="summary-item"><span class="summary-label">欠款金额</span><span class="summary-value">{{ editingCase.arrearsAmount || 0 }}</span></div>
+            <div class="summary-item summary-item-wide"><span class="summary-label">跟进备注</span><span class="summary-value">{{ editingCase.remark || editingCase.customerRemark || '-' }}</span></div>
+          </div>
+        </el-card>
         <div class="form-grid">
           <el-form-item label="客户姓名">
             <div class="static-text">{{ editingCase?.name || '-' }}</div>
@@ -551,6 +628,45 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   color: var(--el-text-color-primary);
+}
+
+.summary-card {
+  border-radius: 12px;
+}
+
+.section-title {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.customer-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--el-fill-color-light);
+}
+
+.summary-item-wide {
+  grid-column: 1 / -1;
+}
+
+.summary-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.summary-value {
+  color: var(--el-text-color-primary);
+  font-weight: 600;
+  word-break: break-all;
 }
 
 .dialog-actions :deep(.el-form-item__content) {

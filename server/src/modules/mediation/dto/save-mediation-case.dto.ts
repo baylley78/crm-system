@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer'
+import { Type, Transform } from 'class-transformer'
 import { IsBoolean, IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator'
 
 export class SaveMediationCaseDto {
@@ -27,6 +27,7 @@ export class SaveMediationCaseDto {
   startDate?: string
 
   @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   isCompleted?: boolean
 

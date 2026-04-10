@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { computed, reactive, ref, watch } from 'vue'
 import { authStorage } from '../../auth'
@@ -332,6 +332,43 @@ const handleChatRecordPaste = (event: ClipboardEvent) => {
   ElMessage.success('聊天记录已粘贴')
 }
 
+const closeDrawer = async () => {
+  if (loading.value) {
+    return
+  }
+
+  if (!hasUnsavedChanges()) {
+    visible.value = false
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm('确认关闭将丢失未保存的录单内容，是否继续？', '提示', {
+      type: 'warning',
+      confirmButtonText: '确认关闭',
+      cancelButtonText: '继续填写',
+    })
+    visible.value = false
+  } catch {
+    return
+  }
+}
+
+const hasUnsavedChanges = () => {
+  const initial = initialForm()
+  return Object.keys(initial).some((key) => {
+    const field = key as keyof ThirdSalesOrderPayload
+    const currentValue = form[field]
+    const initialValue = initial[field]
+
+    if (Array.isArray(currentValue) || Array.isArray(initialValue)) {
+      return (currentValue as unknown[]).length !== (initialValue as unknown[]).length
+    }
+
+    return currentValue !== initialValue
+  }) || evidenceFileList.value.length > 0 || paymentScreenshotList.value.length > 0 || chatRecordFileList.value.length > 0
+}
+
 const amountPattern = /^\d+(\.\d{1,2})?$/
 
 const submit = async () => {
@@ -434,7 +471,14 @@ defineExpose({ openForCustomer, openForEdit, openForTailPayment })
 </script>
 
 <template>
-  <el-drawer v-model="visible" :title="isEditMode() ? '编辑三销业绩' : '录入三销业绩'" size="700px">
+  <el-drawer
+    v-model="visible"
+    :title="isEditMode() ? '编辑三销业绩' : '录入三销业绩'"
+    size="700px"
+    :close-on-click-modal="false"
+    :close-on-press-escape="false"
+    :before-close="closeDrawer"
+  >
     <div class="page-stack drawer-body">
       <el-card shadow="never" class="summary-card">
         <template #header>

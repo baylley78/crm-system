@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Plus } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -152,8 +152,41 @@ const fillFormForEdit = (order: FirstSalesListItem) => {
   chatRecordPreviewUrl.value = ''
 }
 
-const closeDrawer = () => {
-  visible.value = false
+const closeDrawer = async () => {
+  if (loading.value) {
+    return
+  }
+
+  if (!hasUnsavedChanges()) {
+    visible.value = false
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm('确认关闭将丢失未保存的录单内容，是否继续？', '提示', {
+      type: 'warning',
+      confirmButtonText: '确认关闭',
+      cancelButtonText: '继续填写',
+    })
+    visible.value = false
+  } catch {
+    return
+  }
+}
+
+const hasUnsavedChanges = () => {
+  const initial = initialForm()
+  return Object.keys(initial).some((key) => {
+    const field = key as keyof FirstSalesForm
+    const currentValue = form[field]
+    const initialValue = initial[field]
+
+    if (Array.isArray(currentValue) || Array.isArray(initialValue)) {
+      return (currentValue as unknown[]).length !== (initialValue as unknown[]).length
+    }
+
+    return currentValue !== initialValue
+  }) || paymentScreenshotList.value.length > 0 || chatRecordFileList.value.length > 0 || evidenceImageList.value.length > 0
 }
 
 const loadUsers = async () => {
@@ -433,7 +466,14 @@ defineExpose({
 </script>
 
 <template>
-  <el-drawer v-model="visible" :title="isEditMode() ? '编辑一销业绩' : '录入业绩'" size="560px">
+  <el-drawer
+    v-model="visible"
+    :title="isEditMode() ? '编辑一销业绩' : '录入业绩'"
+    size="560px"
+    :close-on-click-modal="false"
+    :close-on-press-escape="false"
+    :before-close="closeDrawer"
+  >
     <el-form label-width="110px" class="page-stack">
       <el-alert :title="isEditMode() ? '保存后将更新客户档案与一销业绩记录' : '保存后将同步客户档案，并自动刷新一销业绩列表'" type="info" :closable="false" show-icon />
 

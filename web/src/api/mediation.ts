@@ -5,6 +5,7 @@ const buildMediationFormData = (payload: SaveMediationCasePayload) => {
   const formData = new FormData()
   formData.append('customerId', String(payload.customerId))
   formData.append('progressStatus', payload.progressStatus)
+  formData.append('isCompleted', String(Boolean(payload.isCompleted)))
   if (payload.mediationResult) {
     formData.append('mediationResult', payload.mediationResult)
   }
