@@ -126,13 +126,19 @@ export class LegalService {
           secondPaymentAmount: Number(customer.secondPaymentAmount),
           currentStatus: this.mapCustomerStatus(customer.currentStatus),
           legalUserName: latestCase?.legalUser?.realName ?? customer.legalUser?.realName,
-          progressStatus: latestCase?.progressStatus ?? (customer.currentStatus === CustomerStatus.PENDING_LEGAL ? '待接案' : '处理中'),
+          progressStatus: latestCase?.progressStatus ?? (customer.currentStatus === CustomerStatus.PENDING_LEGAL ? '待分配' : '处理中'),
           caseResult: latestCase?.caseResult ?? '',
           remark: latestCase?.remark ?? latestSecondSalesOrder?.remark ?? '',
           customerSituationRemark: latestSecondSalesOrder?.remark ?? latestFirstSalesOrder?.remark ?? customer.remark ?? '',
           firstSalesRemark: latestFirstSalesOrder?.remark ?? customer.remark ?? '',
           secondSalesRemark: latestSecondSalesOrder?.remark ?? '',
           thirdSalesRemark: latestThirdSalesOrder?.remark ?? '',
+          assistantCustomerSituationRemark: latestCase?.assistantCustomerSituationRemark ?? '',
+          assistantFollowRemark: latestCase?.assistantFollowRemark ?? '',
+          filingCustomerSituationRemark: latestCase?.filingCustomerSituationRemark ?? '',
+          filingFollowRemark: latestCase?.filingFollowRemark ?? '',
+          preTrialCustomerSituationRemark: latestCase?.preTrialCustomerSituationRemark ?? '',
+          preTrialFollowRemark: latestCase?.preTrialFollowRemark ?? '',
           upstreamEvidenceFileUrls: [...firstSalesEvidence, ...secondSalesEvidence, ...thirdSalesEvidence],
           firstSalesEvidenceFileUrls: firstSalesEvidence,
           secondSalesEvidenceFileUrls: secondSalesEvidence,
@@ -210,7 +216,7 @@ export class LegalService {
 
     const legalOwnerId = latestCase?.legalUserId ?? customer.legalUserId ?? customer.currentOwnerId ?? currentUser.id
     const startDate = this.resolveStartDate(currentUser, dto.startDate, latestCase?.startDate)
-    const stage = dto.stage ?? latestCase?.stage ?? LegalCaseStage.ASSISTANT
+    const stage = dto.stage ?? latestCase?.stage ?? LegalCaseStage.PENDING_ASSIGNMENT
     const assistantCollected = dto.assistantCollected ?? latestCase?.assistantCollected ?? false
     const assistantDocumented = dto.assistantDocumented ?? latestCase?.assistantDocumented ?? false
     const archiveNeeded = dto.archiveNeeded ?? latestCase?.archiveNeeded ?? false
@@ -219,9 +225,12 @@ export class LegalService {
     const filingApproved = dto.filingApproved ?? latestCase?.filingApproved ?? false
     const transferredToPreTrial = dto.transferredToPreTrial ?? latestCase?.transferredToPreTrial ?? false
     const isCompleted = dto.isCompleted ?? latestCase?.isCompleted ?? false
-    const nextStatus = this.resolveNextCustomerStatus({ filingApproved, transferredToPreTrial, isCompleted })
+    const nextStatus = this.resolveNextCustomerStatus({ stage, filingApproved, transferredToPreTrial, isCompleted })
     const acceptedAt = latestCase?.acceptedAt ?? new Date()
-    const assistantTransferredAt = stage !== LegalCaseStage.ASSISTANT && !latestCase?.assistantTransferredAt ? new Date() : latestCase?.assistantTransferredAt ?? null
+    const assistantTransferredAt =
+      stage !== LegalCaseStage.PENDING_ASSIGNMENT && stage !== LegalCaseStage.ASSISTANT && !latestCase?.assistantTransferredAt
+        ? new Date()
+        : latestCase?.assistantTransferredAt ?? null
     const filingApprovedAt = filingApproved && !latestCase?.filingApprovedAt ? new Date() : latestCase?.filingApprovedAt ?? null
     const preTrialTransferredAt = transferredToPreTrial && !latestCase?.preTrialTransferredAt ? new Date() : latestCase?.preTrialTransferredAt ?? null
     const completedAt = isCompleted ? latestCase?.completedAt ?? new Date() : null
@@ -237,7 +246,7 @@ export class LegalService {
         filingApproved,
         completedAt,
         stage,
-        assistantUserId: dto.assistantUserId ?? latestCase?.assistantUserId ?? currentUser.id,
+        assistantUserId: dto.assistantUserId ?? latestCase?.assistantUserId ?? null,
         filingSpecialistUserId: dto.filingSpecialistUserId ?? latestCase?.filingSpecialistUserId ?? null,
         preTrialUserId: dto.preTrialUserId ?? latestCase?.preTrialUserId ?? null,
         assistantCollected,
@@ -246,6 +255,12 @@ export class LegalService {
         archiveCompleted,
         filingReviewed,
         transferredToPreTrial,
+        assistantCustomerSituationRemark: dto.assistantCustomerSituationRemark ?? latestCase?.assistantCustomerSituationRemark ?? null,
+        assistantFollowRemark: dto.assistantFollowRemark ?? latestCase?.assistantFollowRemark ?? null,
+        filingCustomerSituationRemark: dto.filingCustomerSituationRemark ?? latestCase?.filingCustomerSituationRemark ?? null,
+        filingFollowRemark: dto.filingFollowRemark ?? latestCase?.filingFollowRemark ?? null,
+        preTrialCustomerSituationRemark: dto.preTrialCustomerSituationRemark ?? latestCase?.preTrialCustomerSituationRemark ?? null,
+        preTrialFollowRemark: dto.preTrialFollowRemark ?? latestCase?.preTrialFollowRemark ?? null,
         acceptedAt,
         assistantTransferredAt,
         filingApprovedAt,
@@ -278,6 +293,12 @@ export class LegalService {
             filingApproved,
             transferredToPreTrial,
             isCompleted,
+            assistantCustomerSituationRemark: dto.assistantCustomerSituationRemark ?? latestCase?.assistantCustomerSituationRemark ?? null,
+            assistantFollowRemark: dto.assistantFollowRemark ?? latestCase?.assistantFollowRemark ?? null,
+            filingCustomerSituationRemark: dto.filingCustomerSituationRemark ?? latestCase?.filingCustomerSituationRemark ?? null,
+            filingFollowRemark: dto.filingFollowRemark ?? latestCase?.filingFollowRemark ?? null,
+            preTrialCustomerSituationRemark: dto.preTrialCustomerSituationRemark ?? latestCase?.preTrialCustomerSituationRemark ?? null,
+            preTrialFollowRemark: dto.preTrialFollowRemark ?? latestCase?.preTrialFollowRemark ?? null,
           }),
         },
       })
@@ -337,17 +358,32 @@ export class LegalService {
     isCompleted?: boolean | null
     closeResult?: string | null
     stage?: LegalCaseStage | null
+    assistantCustomerSituationRemark?: string | null
+    assistantFollowRemark?: string | null
+    filingCustomerSituationRemark?: string | null
+    filingFollowRemark?: string | null
+    preTrialCustomerSituationRemark?: string | null
+    preTrialFollowRemark?: string | null
   } | null) {
     const permissions = new Set(currentUser.permissions || [])
-    const currentStage = latestCase?.stage ?? LegalCaseStage.ASSISTANT
+    const currentStage = latestCase?.stage ?? LegalCaseStage.PENDING_ASSIGNMENT
 
     const changedAssignment =
       (dto.assistantUserId !== undefined && dto.assistantUserId !== (latestCase?.assistantUserId ?? undefined)) ||
       (dto.filingSpecialistUserId !== undefined && dto.filingSpecialistUserId !== (latestCase?.filingSpecialistUserId ?? undefined)) ||
-      (dto.preTrialUserId !== undefined && dto.preTrialUserId !== (latestCase?.preTrialUserId ?? undefined))
+      (dto.preTrialUserId !== undefined && dto.preTrialUserId !== (latestCase?.preTrialUserId ?? undefined)) ||
+      (dto.stage !== undefined && dto.stage !== currentStage && (currentStage === LegalCaseStage.PENDING_ASSIGNMENT || dto.stage === LegalCaseStage.PENDING_ASSIGNMENT))
 
     if (changedAssignment && !permissions.has(LEGAL_ASSIGN_PERMISSION)) {
       throw new BadRequestException('无权分派法务岗位')
+    }
+
+    const changedAssistantRemarks =
+      (dto.assistantCustomerSituationRemark !== undefined && dto.assistantCustomerSituationRemark !== (latestCase?.assistantCustomerSituationRemark ?? '')) ||
+      (dto.assistantFollowRemark !== undefined && dto.assistantFollowRemark !== (latestCase?.assistantFollowRemark ?? ''))
+
+    if (changedAssistantRemarks && !(permissions.has('legal.edit') || permissions.has(LEGAL_ASSIGN_PERMISSION))) {
+      throw new BadRequestException('无权维护助理阶段跟进说明')
     }
 
     const nextStage = dto.stage ?? currentStage
@@ -355,6 +391,8 @@ export class LegalService {
     const changedFilingReview =
       (dto.filingReviewed !== undefined && dto.filingReviewed !== (latestCase?.filingReviewed ?? false)) ||
       (dto.filingApproved !== undefined && dto.filingApproved !== (latestCase?.filingApproved ?? false)) ||
+      (dto.filingCustomerSituationRemark !== undefined && dto.filingCustomerSituationRemark !== (latestCase?.filingCustomerSituationRemark ?? '')) ||
+      (dto.filingFollowRemark !== undefined && dto.filingFollowRemark !== (latestCase?.filingFollowRemark ?? '')) ||
       enteredFilingStage
 
     if (changedFilingReview && !permissions.has(LEGAL_FILING_REVIEW_PERMISSION)) {
@@ -364,6 +402,8 @@ export class LegalService {
     const enteredPreTrialStage = dto.stage !== undefined && currentStage !== LegalCaseStage.PRE_TRIAL && nextStage === LegalCaseStage.PRE_TRIAL
     const changedPreTrial =
       (dto.transferredToPreTrial !== undefined && dto.transferredToPreTrial !== (latestCase?.transferredToPreTrial ?? false)) ||
+      (dto.preTrialCustomerSituationRemark !== undefined && dto.preTrialCustomerSituationRemark !== (latestCase?.preTrialCustomerSituationRemark ?? '')) ||
+      (dto.preTrialFollowRemark !== undefined && dto.preTrialFollowRemark !== (latestCase?.preTrialFollowRemark ?? '')) ||
       enteredPreTrialStage
 
     if (changedPreTrial && !permissions.has(LEGAL_PRETRIAL_HANDLE_PERMISSION)) {
@@ -381,7 +421,11 @@ export class LegalService {
     }
   }
 
-  private resolveNextCustomerStatus(input: { filingApproved: boolean; transferredToPreTrial: boolean; isCompleted: boolean }) {
+  private resolveNextCustomerStatus(input: { stage: LegalCaseStage; filingApproved: boolean; transferredToPreTrial: boolean; isCompleted: boolean }) {
+    if (input.stage === LegalCaseStage.PENDING_ASSIGNMENT) {
+      return CustomerStatus.PENDING_LEGAL
+    }
+
     if (input.filingApproved || input.transferredToPreTrial || input.isCompleted) {
       return CustomerStatus.PENDING_THIRD_SALES
     }
@@ -425,17 +469,41 @@ export class LegalService {
     ]
   }
 
-  private buildFollowContent(input: { stage: LegalCaseStage; progressStatus: string; filingApproved: boolean; transferredToPreTrial: boolean; isCompleted: boolean }) {
+  private buildFollowContent(input: { stage: LegalCaseStage; progressStatus: string; filingApproved: boolean; transferredToPreTrial: boolean; isCompleted: boolean; assistantCustomerSituationRemark?: string | null; assistantFollowRemark?: string | null; filingCustomerSituationRemark?: string | null; filingFollowRemark?: string | null; preTrialCustomerSituationRemark?: string | null; preTrialFollowRemark?: string | null }) {
     const stageLabel = this.mapLegalCaseStage(input.stage)
     const suffix: string[] = []
+    const summary = this.getStageRemarkSummary(input)
+    if (summary) suffix.push(summary)
     if (input.filingApproved) suffix.push('立案已通过')
     if (input.transferredToPreTrial) suffix.push('已转庭前')
     if (input.isCompleted) suffix.push('已结案')
     return `法务阶段：${stageLabel}；进度：${input.progressStatus}${suffix.length ? `；${suffix.join('；')}` : ''}`
   }
 
+  private getStageRemarkSummary(input: { stage: LegalCaseStage; assistantCustomerSituationRemark?: string | null; assistantFollowRemark?: string | null; filingCustomerSituationRemark?: string | null; filingFollowRemark?: string | null; preTrialCustomerSituationRemark?: string | null; preTrialFollowRemark?: string | null }) {
+    const parts: string[] = []
+
+    if (input.stage === LegalCaseStage.ASSISTANT) {
+      if (input.assistantCustomerSituationRemark) parts.push(`客户情况：${input.assistantCustomerSituationRemark}`)
+      if (input.assistantFollowRemark) parts.push(`跟进说明：${input.assistantFollowRemark}`)
+    }
+
+    if (input.stage === LegalCaseStage.FILING_SPECIALIST) {
+      if (input.filingCustomerSituationRemark) parts.push(`客户情况：${input.filingCustomerSituationRemark}`)
+      if (input.filingFollowRemark) parts.push(`跟进说明：${input.filingFollowRemark}`)
+    }
+
+    if (input.stage === LegalCaseStage.PRE_TRIAL) {
+      if (input.preTrialCustomerSituationRemark) parts.push(`客户情况：${input.preTrialCustomerSituationRemark}`)
+      if (input.preTrialFollowRemark) parts.push(`跟进说明：${input.preTrialFollowRemark}`)
+    }
+
+    return parts.join('；')
+  }
+
   private mapLegalCaseStage(stage: LegalCaseStage) {
     const labels: Record<LegalCaseStage, string> = {
+      PENDING_ASSIGNMENT: '待分配阶段',
       ASSISTANT: '助理阶段',
       FILING_SPECIALIST: '立案专员阶段',
       PRE_TRIAL: '庭前阶段',

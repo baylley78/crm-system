@@ -23,6 +23,7 @@ const customers = ref<CustomerItem[]>([])
 const total = ref(0)
 const loadError = ref('')
 const drawerVisible = ref(false)
+const filterDrawerVisible = ref(false)
 const tailPaymentDrawerVisible = ref(false)
 const currentCustomerId = ref<number | null>(null)
 const refundDialogVisible = ref(false)
@@ -177,6 +178,7 @@ const resetFilters = async () => {
 const handleSearch = async () => {
   currentPage.value = 1
   await loadCustomers()
+  filterDrawerVisible.value = false
 }
 
 const openDetail = async (id: number) => {
@@ -264,6 +266,7 @@ onActivated(async () => {
         <div class="card-header-row">
           <span>客户管理</span>
           <el-space wrap>
+            <el-button @click="filterDrawerVisible = true">筛选条件</el-button>
             <el-button type="primary" @click="handleSearch">查询</el-button>
             <el-button @click="resetFilters">重置</el-button>
           </el-space>
@@ -271,51 +274,6 @@ onActivated(async () => {
       </template>
 
       <div class="page-stack-sm">
-        <el-card shadow="never">
-          <el-form class="filter-form">
-            <div class="form-grid">
-              <el-form-item label="客户姓名">
-                <el-input v-model="filters.name" placeholder="请输入客户姓名" clearable />
-              </el-form-item>
-              <el-form-item label="手机号码">
-                <el-input v-model="filters.phone" placeholder="请输入手机号" clearable />
-              </el-form-item>
-              <el-form-item label="微信号">
-                <el-input v-model="filters.wechat" placeholder="请输入微信号" clearable />
-              </el-form-item>
-              <el-form-item label="客户来源">
-                <el-input v-model="filters.source" placeholder="请输入客户来源" clearable />
-              </el-form-item>
-              <el-form-item label="案件类型">
-                <el-input v-model="filters.caseType" placeholder="请输入案件类型" clearable />
-              </el-form-item>
-              <el-form-item label="意向等级">
-                <el-input v-model="filters.intentionLevel" placeholder="请输入意向等级" clearable />
-              </el-form-item>
-              <el-form-item label="当前状态">
-                <el-select v-model="filters.status" placeholder="请选择状态" clearable>
-                  <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="尾款补齐">
-                <el-select v-model="filters.isTailPaymentCompleted" placeholder="全部" clearable>
-                  <el-option v-for="item in booleanOptions" :key="item.value" :label="item.label" :value="item.value" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="有审批记录">
-                <el-select v-model="filters.hasApprovalRecord" placeholder="全部" clearable>
-                  <el-option v-for="item in booleanOptions" :key="item.value" :label="item.label" :value="item.value" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="有质检记录">
-                <el-select v-model="filters.hasQualityRecord" placeholder="全部" clearable>
-                  <el-option v-for="item in booleanOptions" :key="item.value" :label="item.label" :value="item.value" />
-                </el-select>
-              </el-form-item>
-            </div>
-          </el-form>
-        </el-card>
-
         <el-card shadow="never">
           <template #header>
             <div class="card-header-row">
@@ -451,6 +409,57 @@ onActivated(async () => {
       </div>
     </el-card>
 
+    <el-drawer v-model="filterDrawerVisible" title="筛选条件" size="520px">
+      <div class="page-stack-sm">
+        <el-form class="filter-form">
+          <div class="form-grid">
+            <el-form-item label="客户姓名">
+              <el-input v-model="filters.name" placeholder="请输入客户姓名" clearable />
+            </el-form-item>
+            <el-form-item label="手机号码">
+              <el-input v-model="filters.phone" placeholder="请输入手机号" clearable />
+            </el-form-item>
+            <el-form-item label="微信号">
+              <el-input v-model="filters.wechat" placeholder="请输入微信号" clearable />
+            </el-form-item>
+            <el-form-item label="客户来源">
+              <el-input v-model="filters.source" placeholder="请输入客户来源" clearable />
+            </el-form-item>
+            <el-form-item label="案件类型">
+              <el-input v-model="filters.caseType" placeholder="请输入案件类型" clearable />
+            </el-form-item>
+            <el-form-item label="意向等级">
+              <el-input v-model="filters.intentionLevel" placeholder="请输入意向等级" clearable />
+            </el-form-item>
+            <el-form-item label="当前状态">
+              <el-select v-model="filters.status" placeholder="请选择状态" clearable>
+                <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="尾款补齐">
+              <el-select v-model="filters.isTailPaymentCompleted" placeholder="全部" clearable>
+                <el-option v-for="item in booleanOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="有审批记录">
+              <el-select v-model="filters.hasApprovalRecord" placeholder="全部" clearable>
+                <el-option v-for="item in booleanOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="有质检记录">
+              <el-select v-model="filters.hasQualityRecord" placeholder="全部" clearable>
+                <el-option v-for="item in booleanOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
+          </div>
+        </el-form>
+        <div class="drawer-footer-actions">
+          <el-button @click="resetFilters">重置</el-button>
+          <el-button type="primary" @click="handleSearch">查询</el-button>
+        </div>
+      </div>
+    </el-drawer>
+
     <CustomerDetailDrawer ref="detailDrawerRef" v-model:visible="drawerVisible" @updated="handleDrawerUpdated" />
     <CustomerTailPaymentDrawer ref="tailPaymentDrawerRef" v-model:visible="tailPaymentDrawerVisible" @updated="handleDrawerUpdated" />
     <RefundCreateDialog v-model:visible="refundDialogVisible" :draft="refundDraft" @success="handleDrawerUpdated" />
@@ -464,6 +473,12 @@ onActivated(async () => {
 
 .filter-form :deep(.el-select) {
   width: 100%;
+}
+
+.drawer-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .table-caption {

@@ -17,27 +17,7 @@ export type BuiltInRoleDefinition = {
 }
 
 export const BUILT_IN_ROLE_CODES = [
-  'UNASSIGNED',
   'SUPER_ADMIN',
-  'FIRST_SALES_MANAGER',
-  'FIRST_SALES_SUPERVISOR',
-  'FIRST_SALES',
-  'SECOND_SALES_MANAGER',
-  'SECOND_SALES_SUPERVISOR',
-  'SECOND_SALES',
-  'HR_MANAGER',
-  'HR',
-  'THIRD_SALES',
-  'FINANCE_MANAGER',
-  'FINANCE',
-  'AFTER_SALES_MANAGER',
-  'AFTER_SALES',
-  'BACKEND_ADMIN',
-  'CLERK',
-  'CONTRACT_SPECIALIST',
-  'MEDIATION_SPECIALIST',
-  'LEGAL_MANAGER',
-  'LEGAL',
 ] as const satisfies readonly string[]
 
 export const BUILT_IN_PERMISSION_DEFINITIONS: BuiltInPermissionDefinition[] = [

@@ -21,6 +21,7 @@ const canOperateLegal = () => canEditLegal() || canAssignLegal() || canReviewFil
 const canOnlyEditLegalBaseFields = () => canEditLegal() && !canAssignLegal() && !canReviewFiling() && !canHandlePreTrial() && !canCloseLegal()
 
 const stageOptions: Array<{ label: string; value: LegalCaseStage }> = [
+  { label: '待分配阶段', value: 'PENDING_ASSIGNMENT' },
   { label: '助理阶段', value: 'ASSISTANT' },
   { label: '立案专员阶段', value: 'FILING_SPECIALIST' },
   { label: '庭前阶段', value: 'PRE_TRIAL' },
@@ -45,13 +46,19 @@ const form = reactive<SaveLegalCasePayload>({
   remark: '',
   isCompleted: false,
   filingApproved: false,
-  stage: 'ASSISTANT',
+  stage: 'PENDING_ASSIGNMENT',
   assistantCollected: false,
   assistantDocumented: false,
   archiveNeeded: false,
   archiveCompleted: false,
   filingReviewed: false,
   transferredToPreTrial: false,
+  assistantCustomerSituationRemark: '',
+  assistantFollowRemark: '',
+  filingCustomerSituationRemark: '',
+  filingFollowRemark: '',
+  preTrialCustomerSituationRemark: '',
+  preTrialFollowRemark: '',
   closeResult: '',
 })
 const currentPage = ref(1)
@@ -63,6 +70,7 @@ const activeCase = ref<LegalCaseItem | null>(null)
 const legalUsers = computed(() => users.value.filter((item) => ['SUPER_ADMIN', 'LEGAL_MANAGER', 'LEGAL'].includes(item.roleCode || '')))
 
 const stageLabelMap: Record<LegalCaseStage, string> = {
+  PENDING_ASSIGNMENT: '待分配阶段',
   ASSISTANT: '助理阶段',
   FILING_SPECIALIST: '立案专员阶段',
   PRE_TRIAL: '庭前阶段',
@@ -100,7 +108,7 @@ const openDialog = (item: LegalCaseItem) => {
   form.startDate = item.startDate ? item.startDate.slice(0, 16) : ''
   form.isCompleted = item.isCompleted
   form.filingApproved = item.filingApproved
-  form.stage = item.stage || 'ASSISTANT'
+  form.stage = item.stage || 'PENDING_ASSIGNMENT'
   form.assistantUserId = item.assistantUserId
   form.filingSpecialistUserId = item.filingSpecialistUserId
   form.preTrialUserId = item.preTrialUserId
@@ -110,6 +118,12 @@ const openDialog = (item: LegalCaseItem) => {
   form.archiveCompleted = item.archiveCompleted
   form.filingReviewed = item.filingReviewed
   form.transferredToPreTrial = item.transferredToPreTrial
+  form.assistantCustomerSituationRemark = item.assistantCustomerSituationRemark || ''
+  form.assistantFollowRemark = item.assistantFollowRemark || ''
+  form.filingCustomerSituationRemark = item.filingCustomerSituationRemark || ''
+  form.filingFollowRemark = item.filingFollowRemark || ''
+  form.preTrialCustomerSituationRemark = item.preTrialCustomerSituationRemark || ''
+  form.preTrialFollowRemark = item.preTrialFollowRemark || ''
   form.closeResult = item.closeResult || ''
   dialogVisible.value = true
 }
@@ -291,10 +305,16 @@ const openAttachment = (url?: string) => {
                 <el-descriptions-item label="法务助理">{{ activeCase.assistantUserName || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="立案专员">{{ activeCase.filingSpecialistUserName || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="庭前负责人">{{ activeCase.preTrialUserName || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="客户情况说明">{{ activeCase.customerSituationRemark || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="客户基础情况说明">{{ activeCase.customerSituationRemark || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="一销情况说明">{{ activeCase.firstSalesRemark || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="二销情况说明">{{ activeCase.secondSalesRemark || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="法务备注">{{ activeCase.remark || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="助理客户情况" :span="2">{{ activeCase.assistantCustomerSituationRemark || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="助理跟进说明" :span="2">{{ activeCase.assistantFollowRemark || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="立案客户情况" :span="2">{{ activeCase.filingCustomerSituationRemark || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="立案跟进说明" :span="2">{{ activeCase.filingFollowRemark || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="庭前客户情况" :span="2">{{ activeCase.preTrialCustomerSituationRemark || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="庭前跟进说明" :span="2">{{ activeCase.preTrialFollowRemark || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="收集证据">{{ activeCase.assistantCollected ? '已完成' : '未完成' }}</el-descriptions-item>
                 <el-descriptions-item label="文书撰写">{{ activeCase.assistantDocumented ? '已完成' : '未完成' }}</el-descriptions-item>
                 <el-descriptions-item label="是否查档">{{ activeCase.archiveNeeded ? '是' : '否' }}</el-descriptions-item>
@@ -474,6 +494,24 @@ const openAttachment = (url?: string) => {
         </el-form-item>
         <el-form-item label="备注" class="full-width">
           <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="请输入法务备注" />
+        </el-form-item>
+        <el-form-item label="助理客户情况" class="full-width">
+          <el-input v-model="form.assistantCustomerSituationRemark" type="textarea" :rows="3" placeholder="请输入助理客户情况说明" />
+        </el-form-item>
+        <el-form-item label="助理跟进说明" class="full-width">
+          <el-input v-model="form.assistantFollowRemark" type="textarea" :rows="3" placeholder="请输入助理跟进说明" />
+        </el-form-item>
+        <el-form-item label="立案客户情况" class="full-width">
+          <el-input v-model="form.filingCustomerSituationRemark" type="textarea" :rows="3" placeholder="请输入立案专员客户情况说明" />
+        </el-form-item>
+        <el-form-item label="立案跟进说明" class="full-width">
+          <el-input v-model="form.filingFollowRemark" type="textarea" :rows="3" placeholder="请输入立案专员跟进说明" />
+        </el-form-item>
+        <el-form-item label="庭前客户情况" class="full-width">
+          <el-input v-model="form.preTrialCustomerSituationRemark" type="textarea" :rows="3" placeholder="请输入庭前客户情况说明" />
+        </el-form-item>
+        <el-form-item label="庭前跟进说明" class="full-width">
+          <el-input v-model="form.preTrialFollowRemark" type="textarea" :rows="3" placeholder="请输入庭前跟进说明" />
         </el-form-item>
         <el-form-item label="已收集证据">
           <el-switch v-model="form.assistantCollected" />

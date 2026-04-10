@@ -154,6 +154,13 @@ export interface CustomerDetail extends CustomerItem {
         progressStatus: string
         caseResult?: string
         remark?: string
+        stage: LegalCaseStage
+        assistantCustomerSituationRemark?: string
+        assistantFollowRemark?: string
+        filingCustomerSituationRemark?: string
+        filingFollowRemark?: string
+        preTrialCustomerSituationRemark?: string
+        preTrialFollowRemark?: string
         isCompleted: boolean
         filingApproved: boolean
         createdAt: string
@@ -581,7 +588,7 @@ export interface TransferToMediationPayload {
   customerId: number
 }
 
-export type LegalCaseStage = 'ASSISTANT' | 'FILING_SPECIALIST' | 'PRE_TRIAL' | 'CLOSED'
+export type LegalCaseStage = 'PENDING_ASSIGNMENT' | 'ASSISTANT' | 'FILING_SPECIALIST' | 'PRE_TRIAL' | 'CLOSED'
 
 export interface LegalCaseItem {
   customerId: number
@@ -603,6 +610,12 @@ export interface LegalCaseItem {
   firstSalesRemark?: string
   secondSalesRemark?: string
   thirdSalesRemark?: string
+  assistantCustomerSituationRemark?: string
+  assistantFollowRemark?: string
+  filingCustomerSituationRemark?: string
+  filingFollowRemark?: string
+  preTrialCustomerSituationRemark?: string
+  preTrialFollowRemark?: string
   upstreamEvidenceFileUrls: string[]
   firstSalesEvidenceFileUrls: string[]
   secondSalesEvidenceFileUrls: string[]
@@ -656,6 +669,12 @@ export interface SaveLegalCasePayload {
   archiveCompleted?: boolean
   filingReviewed?: boolean
   transferredToPreTrial?: boolean
+  assistantCustomerSituationRemark?: string
+  assistantFollowRemark?: string
+  filingCustomerSituationRemark?: string
+  filingFollowRemark?: string
+  preTrialCustomerSituationRemark?: string
+  preTrialFollowRemark?: string
   closeResult?: string
 }
 

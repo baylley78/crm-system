@@ -76,5 +76,29 @@ export class SaveLegalCaseDto {
 
   @IsOptional()
   @IsString()
+  assistantCustomerSituationRemark?: string
+
+  @IsOptional()
+  @IsString()
+  assistantFollowRemark?: string
+
+  @IsOptional()
+  @IsString()
+  filingCustomerSituationRemark?: string
+
+  @IsOptional()
+  @IsString()
+  filingFollowRemark?: string
+
+  @IsOptional()
+  @IsString()
+  preTrialCustomerSituationRemark?: string
+
+  @IsOptional()
+  @IsString()
+  preTrialFollowRemark?: string
+
+  @IsOptional()
+  @IsString()
   closeResult?: string
 }

@@ -133,6 +133,7 @@ enum ThirdSalesSourceStage {
 }
 
 enum LegalCaseStage {
+  PENDING_ASSIGNMENT
   ASSISTANT
   FILING_SPECIALIST
   PRE_TRIAL
@@ -447,38 +448,44 @@ model MediationCase {
 }
 
 model LegalCase {
-  id                     Int             @id @default(autoincrement())
-  customerId             Int
-  legalUserId            Int
-  startDate              DateTime        @default(now())
-  progressStatus         String
-  caseResult             String?
-  filingApproved         Boolean         @default(false)
-  isCompleted            Boolean         @default(false)
-  completedAt            DateTime?
-  remark                 String?
-  stage                  LegalCaseStage  @default(ASSISTANT)
-  assistantUserId        Int?
-  filingSpecialistUserId Int?
-  preTrialUserId         Int?
-  assistantCollected     Boolean         @default(false)
-  assistantDocumented    Boolean         @default(false)
-  archiveNeeded          Boolean         @default(false)
-  archiveCompleted       Boolean         @default(false)
-  filingReviewed         Boolean         @default(false)
-  transferredToPreTrial  Boolean         @default(false)
-  acceptedAt             DateTime?
-  assistantTransferredAt DateTime?
-  filingApprovedAt       DateTime?
-  preTrialTransferredAt  DateTime?
-  closeResult            String?
-  customer               Customer        @relation(fields: [customerId], references: [id])
-  legalUser              User            @relation(fields: [legalUserId], references: [id])
-  assistantUser          User?           @relation("LegalAssistantUser", fields: [assistantUserId], references: [id])
-  filingSpecialistUser   User?           @relation("LegalFilingSpecialistUser", fields: [filingSpecialistUserId], references: [id])
-  preTrialUser           User?           @relation("LegalPreTrialUser", fields: [preTrialUserId], references: [id])
-  createdAt              DateTime        @default(now())
-  updatedAt              DateTime        @updatedAt
+  id                                Int             @id @default(autoincrement())
+  customerId                        Int
+  legalUserId                       Int
+  startDate                         DateTime        @default(now())
+  progressStatus                    String
+  caseResult                        String?
+  filingApproved                    Boolean         @default(false)
+  isCompleted                       Boolean         @default(false)
+  completedAt                       DateTime?
+  remark                            String?
+  stage                             LegalCaseStage  @default(PENDING_ASSIGNMENT)
+  assistantUserId                   Int?
+  filingSpecialistUserId            Int?
+  preTrialUserId                    Int?
+  assistantCollected                Boolean         @default(false)
+  assistantDocumented               Boolean         @default(false)
+  archiveNeeded                     Boolean         @default(false)
+  archiveCompleted                  Boolean         @default(false)
+  filingReviewed                    Boolean         @default(false)
+  transferredToPreTrial             Boolean         @default(false)
+  assistantCustomerSituationRemark  String?
+  assistantFollowRemark             String?
+  filingCustomerSituationRemark     String?
+  filingFollowRemark                String?
+  preTrialCustomerSituationRemark   String?
+  preTrialFollowRemark              String?
+  acceptedAt                        DateTime?
+  assistantTransferredAt            DateTime?
+  filingApprovedAt                  DateTime?
+  preTrialTransferredAt             DateTime?
+  closeResult                       String?
+  customer                          Customer        @relation(fields: [customerId], references: [id])
+  legalUser                         User            @relation(fields: [legalUserId], references: [id])
+  assistantUser                     User?           @relation("LegalAssistantUser", fields: [assistantUserId], references: [id])
+  filingSpecialistUser              User?           @relation("LegalFilingSpecialistUser", fields: [filingSpecialistUserId], references: [id])
+  preTrialUser                      User?           @relation("LegalPreTrialUser", fields: [preTrialUserId], references: [id])
+  createdAt                         DateTime        @default(now())
+  updatedAt                         DateTime        @updatedAt
 
   @@index([customerId])
   @@index([legalUserId])

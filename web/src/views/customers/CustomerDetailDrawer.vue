@@ -435,9 +435,16 @@ defineExpose({ loadDetail })
               <el-descriptions-item label="法务人员">{{ detail.legalCase?.legalUserName || detail.ownerChain.legalUserName || '-' }}</el-descriptions-item>
               <el-descriptions-item label="处理进度">{{ detail.legalCase?.progressStatus || '-' }}</el-descriptions-item>
               <el-descriptions-item label="处理结果">{{ detail.legalCase?.caseResult || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="当前阶段">{{ detail.legalCase?.stage || '-' }}</el-descriptions-item>
               <el-descriptions-item label="完成状态">{{ detail.legalCase ? (detail.legalCase.isCompleted ? '已完成' : '处理中') : '-' }}</el-descriptions-item>
               <el-descriptions-item label="立案成功">{{ detail.legalCase ? (detail.legalCase.filingApproved ? '是' : '否') : '-' }}</el-descriptions-item>
               <el-descriptions-item label="法务备注" :span="2">{{ detail.legalCase?.remark || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="助理客户情况" :span="2">{{ detail.legalCase?.assistantCustomerSituationRemark || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="助理跟进说明" :span="2">{{ detail.legalCase?.assistantFollowRemark || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="立案客户情况" :span="2">{{ detail.legalCase?.filingCustomerSituationRemark || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="立案跟进说明" :span="2">{{ detail.legalCase?.filingFollowRemark || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="庭前客户情况" :span="2">{{ detail.legalCase?.preTrialCustomerSituationRemark || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="庭前跟进说明" :span="2">{{ detail.legalCase?.preTrialFollowRemark || '-' }}</el-descriptions-item>
               <el-descriptions-item label="记录创建">{{ formatDateTime(detail.legalCase?.createdAt) }}</el-descriptions-item>
               <el-descriptions-item label="最近更新">{{ formatDateTime(detail.legalCase?.updatedAt) }}</el-descriptions-item>
             </el-descriptions>

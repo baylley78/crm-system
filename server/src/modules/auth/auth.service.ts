@@ -448,7 +448,7 @@ export class AuthService {
   async register(dto: RegisterUserDto) {
     await this.ensureUniqueFields(dto.phone, undefined, dto.phone)
     const department = await this.resolveDepartment(dto.departmentId)
-    const firstSalesRoleId = await this.getFirstSalesRoleId()
+    const unassignedRoleId = await this.getRoleIdByCode(UNASSIGNED_ROLE_CODE, '未分配角色不存在')
 
     await this.prisma.user.create({
       data: {
@@ -458,7 +458,7 @@ export class AuthService {
         phone: dto.phone,
         department: department?.name || dto.department,
         departmentId: department?.id,
-        roleId: firstSalesRoleId,
+        roleId: unassignedRoleId,
         status: UserStatus.PENDING,
       },
     })
@@ -772,6 +772,15 @@ export class AuthService {
         })),
       })
     }
+  }
+
+  private async getRoleIdByCode(code: string, errorMessage = '默认角色不存在') {
+    const role = await this.prisma.role.findFirst({ where: { code }, orderBy: { id: 'asc' } })
+    if (!role) {
+      throw new NotFoundException(errorMessage)
+    }
+
+    return role.id
   }
 
   private async getFirstSalesRoleId() {
