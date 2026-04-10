@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer'
+import { Type, Transform } from 'class-transformer'
 import { IsBoolean, IsDateString, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator'
 
 export class SearchCustomerByPhoneDto {
@@ -51,7 +51,7 @@ export class CreateSecondSalesOrderDto {
   paymentAccountId: number
 
   @IsBoolean()
-  @Type(() => Boolean)
+  @Transform(({ value }) => value === true || value === 'true')
   includesHearing: boolean
 
   @IsString()
