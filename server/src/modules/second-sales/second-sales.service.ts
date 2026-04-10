@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common'
 import { CustomerStatus, DataScope, FinanceReviewStatus, FirstOrderType, Prisma } from '@prisma/client'
 import { PrismaService } from '../../prisma/prisma.service'
 import type { AuthenticatedUser } from '../auth/auth.service'
@@ -15,7 +15,7 @@ import { PaymentSerialValidatorService } from '../../common/services/payment-ser
 import { CreateSecondSalesOrderDto } from './dto/second-sales.dto'
 
 @Injectable()
-export class SecondSalesService {
+export class SecondSalesService implements OnModuleInit {
   private readonly timeEditPermission = 'secondSales.time.edit'
 
   private async ensureLegalCaseExists(
@@ -75,6 +75,10 @@ export class SecondSalesService {
     private readonly paymentSerialValidatorService: PaymentSerialValidatorService,
   ) {}
 
+  async onModuleInit() {
+    await this.backfillSecondSalesOrdersToLegal()
+  }
+
   async findOrders(currentUser: AuthenticatedUser, query?: QueryOrderListDto) {
     const page = query?.page ?? 1
     const pageSize = query?.pageSize ?? 30
@@ -118,6 +122,7 @@ export class SecondSalesService {
       pageSize,
     }
   }
+
 
   private resolveOrderType(orderType: CreateSecondSalesOrderDto['orderType']) {
     return orderType as FirstOrderType
@@ -546,6 +551,71 @@ export class SecondSalesService {
     })
 
     return { success: true }
+  }
+
+  private async backfillSecondSalesOrdersToLegal() {
+    const candidates = await this.prisma.secondSalesOrder.findMany({
+      where: {
+        orderType: { in: [FirstOrderType.TAIL, FirstOrderType.FULL] },
+        customer: {
+          currentStatus: { in: [CustomerStatus.SECOND_SALES_FOLLOWING] },
+        },
+      },
+      include: {
+        customer: {
+          include: {
+            legalCases: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
+      },
+      orderBy: [{ customerId: 'asc' }, { createdAt: 'desc' }],
+    })
+
+    const latestOrders = new Map<number, Prisma.SecondSalesOrderGetPayload<{
+      include: {
+        customer: {
+          include: {
+            legalCases: {
+              orderBy: { createdAt: 'desc' }
+              take: 1
+            }
+          }
+        }
+      }
+    }>>()
+    for (const order of candidates) {
+      if (!latestOrders.has(order.customerId)) {
+        latestOrders.set(order.customerId, order)
+      }
+    }
+
+    for (const order of latestOrders.values()) {
+      const customer = order.customer
+      if (!customer) {
+        continue
+      }
+
+      const legalOwnerId = customer.legalUserId ?? order.secondSalesUserId
+      if (!legalOwnerId) {
+        continue
+      }
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.customer.update({
+          where: { id: customer.id },
+          data: {
+            legalUserId: customer.legalUserId ?? legalOwnerId,
+            currentOwnerId: legalOwnerId,
+            currentStatus: CustomerStatus.PENDING_LEGAL,
+          },
+        })
+
+        await this.ensureLegalCaseExists(tx, customer, order.remark ?? undefined, legalOwnerId)
+      })
+    }
   }
 
   private async resolveFilteredDepartmentIds(currentUser: AuthenticatedUser, departmentId?: string) {
