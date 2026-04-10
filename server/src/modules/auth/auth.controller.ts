@@ -39,8 +39,8 @@ export class AuthController {
   @UseGuards(CurrentUserGuard, PermissionGuard)
   @RequirePermission('system.roles.view')
   @Get('roles')
-  findRoles() {
-    return this.authService.findRoles()
+  findRoles(@CurrentUser() currentUser: AuthenticatedUser) {
+    return this.authService.findRoles(currentUser)
   }
 
   @UseGuards(CurrentUserGuard, PermissionGuard)

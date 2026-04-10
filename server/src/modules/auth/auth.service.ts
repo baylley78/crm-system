@@ -40,6 +40,19 @@ type AuthTokenPayload = {
 
 const UNASSIGNED_ROLE_CODE = 'UNASSIGNED'
 const SUPER_ADMIN_ROLE_CODE = 'SUPER_ADMIN'
+const HR_ROLE_CODES = ['HR_MANAGER', 'HR']
+const HR_LIMITED_ASSIGNABLE_ROLE_CODES = [
+  'FIRST_SALES',
+  'SECOND_SALES',
+  'THIRD_SALES',
+  'HR',
+  'FINANCE',
+  'AFTER_SALES',
+  'CLERK',
+  'CONTRACT_SPECIALIST',
+  'MEDIATION_SPECIALIST',
+  'LEGAL',
+]
 const FIRST_SALES_ROLE_CODES = ['SUPER_ADMIN', 'FIRST_SALES_MANAGER', 'FIRST_SALES_SUPERVISOR', 'FIRST_SALES']
 const SECOND_SALES_ROLE_CODES = ['SUPER_ADMIN', 'SECOND_SALES_MANAGER', 'SECOND_SALES_SUPERVISOR', 'SECOND_SALES']
 const LEGAL_ROLE_CODES = ['SUPER_ADMIN', 'LEGAL_MANAGER', 'LEGAL']
@@ -97,7 +110,7 @@ export class AuthService {
     }
   }
 
-  async findRoles() {
+  async findRoles(currentUser?: AuthenticatedUser) {
     const roles = await this.prisma.role.findMany({
       include: {
         permissions: {
@@ -114,7 +127,11 @@ export class AuthService {
       orderBy: { id: 'asc' },
     })
 
-    return roles.map((role) => this.toRoleItem(role))
+    const visibleRoles = currentUser && HR_ROLE_CODES.includes(currentUser.roleCode)
+      ? roles.filter((role) => HR_LIMITED_ASSIGNABLE_ROLE_CODES.includes(role.code))
+      : roles
+
+    return visibleRoles.map((role) => this.toRoleItem(role))
   }
 
   async createRole(dto: CreateRoleDto) {
@@ -542,7 +559,8 @@ export class AuthService {
   }
 
   async findRoleUsers(currentUser: AuthenticatedUser, roleId: number) {
-    await this.ensureRoleExists(roleId)
+    const role = await this.getRoleOrThrow(roleId)
+    this.ensureCanAssignTargetRole(currentUser, role)
     const manageableDepartmentIds = await this.getManageableDepartmentIds(currentUser)
     const users = await this.prisma.user.findMany({
       where: this.buildManagedUsersWhere(currentUser, manageableDepartmentIds),
@@ -570,7 +588,8 @@ export class AuthService {
   }
 
   async updateRoleUsers(currentUser: AuthenticatedUser, roleId: number, dto: UpdateRoleUsersDto) {
-    await this.ensureRoleExists(roleId)
+    const role = await this.getRoleOrThrow(roleId)
+    this.ensureCanAssignTargetRole(currentUser, role)
 
     if (!dto.userIds.length) {
       return this.findRoleUsers(currentUser, roleId)
@@ -838,6 +857,16 @@ export class AuthService {
   private ensureRoleDeletable(role: { code: string }) {
     if ((BUILT_IN_ROLE_CODES as readonly string[]).includes(role.code)) {
       throw new BadRequestException('系统内置角色不允许删除')
+    }
+  }
+
+  private ensureCanAssignTargetRole(currentUser: AuthenticatedUser, role: { code: string }) {
+    if (!HR_ROLE_CODES.includes(currentUser.roleCode)) {
+      return
+    }
+
+    if (!HR_LIMITED_ASSIGNABLE_ROLE_CODES.includes(role.code)) {
+      throw new ForbiddenException('人事仅可分配指定岗位角色')
     }
   }
 
