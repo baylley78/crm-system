@@ -7,32 +7,10 @@ import type { AuthenticatedUser } from '../auth/auth.service'
 
 type ReportStage = 'first-sales' | 'second-sales' | 'third-sales'
 
-type DepartmentRow = { id: number; name: string; parentId: number | null; sort: number }
-
-type StageRootMatcher = (item: DepartmentRow, itemMap: Map<number, DepartmentRow>) => boolean
-
-const normalizeDepartmentName = (value: string) => value.replace(/\s+/g, '')
-
-const isRootDepartmentChildOf = (item: DepartmentRow, itemMap: Map<number, DepartmentRow>, parentNames: string[]) => {
-  if (!item.parentId) {
-    return false
-  }
-
-  const parent = itemMap.get(item.parentId)
-  if (!parent) {
-    return false
-  }
-
-  return parentNames.map(normalizeDepartmentName).includes(normalizeDepartmentName(parent.name))
-}
-
-const REPORT_STAGE_TEAM_ROOT_MATCHERS: Record<ReportStage, StageRootMatcher[]> = {
-  'first-sales': [(item, itemMap) => normalizeDepartmentName(item.name) === '一销团队' && isRootDepartmentChildOf(item, itemMap, ['和晟团队', '星宏团队', '鑫豪团队', '华胜团队'])],
-  'second-sales': [(item, itemMap) => normalizeDepartmentName(item.name) === '二销团队' && isRootDepartmentChildOf(item, itemMap, ['和晟团队', '星宏团队', '鑫豪团队', '华胜团队'])],
-  'third-sales': [
-    (item, itemMap) => normalizeDepartmentName(item.name) === '二销团队' && isRootDepartmentChildOf(item, itemMap, ['和晟团队', '星宏团队', '鑫豪团队', '华胜团队']),
-    (item, itemMap) => normalizeDepartmentName(item.name) === '三销团队',
-  ],
+const REPORT_STAGE_TEAM_ROOTS: Record<ReportStage, string[]> = {
+  'first-sales': ['一销团队'],
+  'second-sales': ['二销团队'],
+  'third-sales': ['二销团队', '三销团队'],
 }
 
 interface ReportQuery {
@@ -193,11 +171,12 @@ export class ReportsService {
 
   async getDepartmentOptions(currentUser: AuthenticatedUser, stage: ReportStage): Promise<{ options: ReportDepartmentOption[] }> {
     const visibleDepartmentIds = await this.buildVisibleDepartmentIds(currentUser)
+    const tree = await this.departmentsService.findTree()
+    const stageDepartmentIds = this.collectStageDepartmentIdsFromTree(tree, REPORT_STAGE_TEAM_ROOTS[stage])
     const departments = await this.prisma.department.findMany({
       select: { id: true, name: true, parentId: true, sort: true },
       orderBy: [{ sort: 'asc' }, { id: 'asc' }],
     })
-    const stageDepartmentIds = this.collectStageDepartmentIdsFromRows(departments, REPORT_STAGE_TEAM_ROOT_MATCHERS[stage])
     const allowedDepartmentIds = visibleDepartmentIds
       ? stageDepartmentIds.filter((id) => visibleDepartmentIds.includes(id))
       : stageDepartmentIds
@@ -605,48 +584,35 @@ export class ReportsService {
     return names.join(' / ')
   }
 
-  private collectStageDepartmentIdsFromRows(
-    items: DepartmentRow[],
-    rootMatchers: StageRootMatcher[],
-  ) {
-    const itemMap = new Map(items.map((item) => [item.id, item]))
-    const childrenMap = new Map<number | null, number[]>()
-
-    for (const item of items) {
-      const siblings = childrenMap.get(item.parentId) || []
-      siblings.push(item.id)
-      childrenMap.set(item.parentId, siblings)
-    }
-
+  private collectStageDepartmentIdsFromTree(items: Array<{ id: number; name: string; children?: Array<any> }>, rootNames: string[]) {
+    const normalizedRoots = new Set(rootNames.map((name) => name.replace(/\s+/g, '')))
     const seen = new Set<number>()
     const result: number[] = []
 
-    for (const item of items) {
-      if (!rootMatchers.some((matcher) => matcher(item, itemMap))) {
-        continue
+    const collectNodeIds = (node: { id: number; children?: Array<any> }) => {
+      if (!seen.has(node.id)) {
+        seen.add(node.id)
+        result.push(node.id)
       }
-      this.collectDepartmentRowIds(item.id, childrenMap, seen, result)
+
+      for (const child of node.children || []) {
+        collectNodeIds(child)
+      }
     }
 
+    const visit = (nodes: Array<{ id: number; name: string; children?: Array<any> }>) => {
+      for (const node of nodes) {
+        if (normalizedRoots.has(node.name.replace(/\s+/g, ''))) {
+          collectNodeIds(node)
+          continue
+        }
+        visit(node.children || [])
+      }
+    }
+
+    visit(items)
     return result
   }
-
-  private collectDepartmentRowIds(
-    departmentId: number,
-    childrenMap: Map<number | null, number[]>,
-    seen: Set<number>,
-    result: number[],
-  ) {
-    if (!seen.has(departmentId)) {
-      seen.add(departmentId)
-      result.push(departmentId)
-    }
-
-    for (const childId of childrenMap.get(departmentId) || []) {
-      this.collectDepartmentRowIds(childId, childrenMap, seen, result)
-    }
-  }
-
 
   private async buildVisibleDepartmentIds(currentUser: AuthenticatedUser): Promise<number[] | null> {
     if (currentUser.reportScope === DataScope.ALL) {
