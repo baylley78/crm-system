@@ -171,8 +171,11 @@ export class ReportsService {
 
   async getDepartmentOptions(currentUser: AuthenticatedUser, stage: ReportStage): Promise<{ options: ReportDepartmentOption[] }> {
     const visibleDepartmentIds = await this.buildVisibleDepartmentIds(currentUser)
-    const departmentTree = await this.departmentsService.findTree(currentUser)
-    const stageDepartmentIds = this.collectStageDepartmentIds(departmentTree, REPORT_STAGE_TEAM_ROOTS[stage])
+    const departments = await this.prisma.department.findMany({
+      select: { id: true, name: true, parentId: true, sort: true },
+      orderBy: [{ sort: 'asc' }, { id: 'asc' }],
+    })
+    const stageDepartmentIds = this.collectStageDepartmentIdsFromRows(departments, REPORT_STAGE_TEAM_ROOTS[stage])
     const allowedDepartmentIds = visibleDepartmentIds
       ? stageDepartmentIds.filter((id) => visibleDepartmentIds.includes(id))
       : stageDepartmentIds
@@ -181,10 +184,6 @@ export class ReportsService {
       return { options: [] }
     }
 
-    const departments = await this.prisma.department.findMany({
-      select: { id: true, name: true, parentId: true, sort: true },
-      orderBy: [{ sort: 'asc' }, { id: 'asc' }],
-    })
     const options = this.flattenDepartmentRows(departments)
       .filter((item) => allowedDepartmentIds.includes(item.id))
 
@@ -584,41 +583,66 @@ export class ReportsService {
     return names.join(' / ')
   }
 
-  private collectStageDepartmentIds(items: Array<{ id: number; name: string; children?: any[] }>, rootNames: string[]) {
+  private collectStageDepartmentIdsFromRows(
+    items: Array<{ id: number; name: string; parentId: number | null; sort: number }>,
+    rootNames: string[],
+  ) {
+    const normalizedRoots = new Set(rootNames.map((name) => name.replace(/\s+/g, '')))
+    const itemMap = new Map(items.map((item) => [item.id, item]))
+    const childrenMap = new Map<number | null, number[]>()
+
+    for (const item of items) {
+      const siblings = childrenMap.get(item.parentId) || []
+      siblings.push(item.id)
+      childrenMap.set(item.parentId, siblings)
+    }
+
     const seen = new Set<number>()
     const result: number[] = []
 
-    for (const rootName of rootNames) {
-      const nodes = this.findDepartmentNodesByName(items, rootName)
-      this.collectDepartmentIds(nodes, seen, result)
+    for (const item of items) {
+      if (!this.hasMatchingAncestorName(item.id, normalizedRoots, itemMap)) {
+        continue
+      }
+      this.collectDepartmentRowIds(item.id, childrenMap, seen, result)
     }
 
     return result
   }
 
-  private findDepartmentNodesByName(items: Array<{ id: number; name: string; children?: any[] }>, name: string): Array<{ id: number; name: string; children?: any[] }> {
-    const normalizedTarget = name.replace(/\s+/g, '')
-    const matched: Array<{ id: number; name: string; children?: any[] }> = []
+  private hasMatchingAncestorName(
+    departmentId: number,
+    normalizedRoots: Set<string>,
+    itemMap: Map<number, { id: number; name: string; parentId: number | null; sort: number }>,
+  ) {
+    let current = itemMap.get(departmentId)
 
-    for (const item of items) {
-      if (item.name.replace(/\s+/g, '') === normalizedTarget) {
-        matched.push(item)
+    while (current) {
+      if (normalizedRoots.has(current.name.replace(/\s+/g, ''))) {
+        return true
       }
-      matched.push(...this.findDepartmentNodesByName(item.children || [], name))
+      current = current.parentId ? itemMap.get(current.parentId) : undefined
     }
 
-    return matched
+    return false
   }
 
-  private collectDepartmentIds(items: Array<{ id: number; children?: any[] }>, seen: Set<number>, result: number[]) {
-    for (const item of items) {
-      if (!seen.has(item.id)) {
-        seen.add(item.id)
-        result.push(item.id)
-      }
-      this.collectDepartmentIds(item.children || [], seen, result)
+  private collectDepartmentRowIds(
+    departmentId: number,
+    childrenMap: Map<number | null, number[]>,
+    seen: Set<number>,
+    result: number[],
+  ) {
+    if (!seen.has(departmentId)) {
+      seen.add(departmentId)
+      result.push(departmentId)
+    }
+
+    for (const childId of childrenMap.get(departmentId) || []) {
+      this.collectDepartmentRowIds(childId, childrenMap, seen, result)
     }
   }
+
 
   private async buildVisibleDepartmentIds(currentUser: AuthenticatedUser): Promise<number[] | null> {
     if (!currentUser.departmentId) {
