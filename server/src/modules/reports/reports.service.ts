@@ -645,6 +645,10 @@ export class ReportsService {
 
 
   private async buildVisibleDepartmentIds(currentUser: AuthenticatedUser): Promise<number[] | null> {
+    if (currentUser.reportScope === DataScope.ALL) {
+      return null
+    }
+
     if (!currentUser.departmentId) {
       return null
     }
