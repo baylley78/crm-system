@@ -7,10 +7,32 @@ import type { AuthenticatedUser } from '../auth/auth.service'
 
 type ReportStage = 'first-sales' | 'second-sales' | 'third-sales'
 
-const REPORT_STAGE_TEAM_ROOTS: Record<ReportStage, string[]> = {
-  'first-sales': ['一销团队'],
-  'second-sales': ['二销团队'],
-  'third-sales': ['二销团队', '三销团队'],
+type DepartmentRow = { id: number; name: string; parentId: number | null; sort: number }
+
+type StageRootMatcher = (item: DepartmentRow, itemMap: Map<number, DepartmentRow>) => boolean
+
+const normalizeDepartmentName = (value: string) => value.replace(/\s+/g, '')
+
+const isRootDepartmentChildOf = (item: DepartmentRow, itemMap: Map<number, DepartmentRow>, parentNames: string[]) => {
+  if (!item.parentId) {
+    return false
+  }
+
+  const parent = itemMap.get(item.parentId)
+  if (!parent) {
+    return false
+  }
+
+  return parentNames.map(normalizeDepartmentName).includes(normalizeDepartmentName(parent.name))
+}
+
+const REPORT_STAGE_TEAM_ROOT_MATCHERS: Record<ReportStage, StageRootMatcher[]> = {
+  'first-sales': [(item, itemMap) => normalizeDepartmentName(item.name) === '一销团队' && isRootDepartmentChildOf(item, itemMap, ['和晟团队', '星宏团队', '鑫豪团队', '华胜团队'])],
+  'second-sales': [(item, itemMap) => normalizeDepartmentName(item.name) === '二销团队' && isRootDepartmentChildOf(item, itemMap, ['和晟团队', '星宏团队', '鑫豪团队', '华胜团队'])],
+  'third-sales': [
+    (item, itemMap) => normalizeDepartmentName(item.name) === '二销团队' && isRootDepartmentChildOf(item, itemMap, ['和晟团队', '星宏团队', '鑫豪团队', '华胜团队']),
+    (item, itemMap) => normalizeDepartmentName(item.name) === '三销团队',
+  ],
 }
 
 interface ReportQuery {
@@ -175,7 +197,7 @@ export class ReportsService {
       select: { id: true, name: true, parentId: true, sort: true },
       orderBy: [{ sort: 'asc' }, { id: 'asc' }],
     })
-    const stageDepartmentIds = this.collectStageDepartmentIdsFromRows(departments, REPORT_STAGE_TEAM_ROOTS[stage])
+    const stageDepartmentIds = this.collectStageDepartmentIdsFromRows(departments, REPORT_STAGE_TEAM_ROOT_MATCHERS[stage])
     const allowedDepartmentIds = visibleDepartmentIds
       ? stageDepartmentIds.filter((id) => visibleDepartmentIds.includes(id))
       : stageDepartmentIds
@@ -584,10 +606,10 @@ export class ReportsService {
   }
 
   private collectStageDepartmentIdsFromRows(
-    items: Array<{ id: number; name: string; parentId: number | null; sort: number }>,
-    rootNames: string[],
+    items: DepartmentRow[],
+    rootMatchers: StageRootMatcher[],
   ) {
-    const normalizedRoots = new Set(rootNames.map((name) => name.replace(/\s+/g, '')))
+    const itemMap = new Map(items.map((item) => [item.id, item]))
     const childrenMap = new Map<number | null, number[]>()
 
     for (const item of items) {
@@ -600,7 +622,7 @@ export class ReportsService {
     const result: number[] = []
 
     for (const item of items) {
-      if (!normalizedRoots.has(item.name.replace(/\s+/g, ''))) {
+      if (!rootMatchers.some((matcher) => matcher(item, itemMap))) {
         continue
       }
       this.collectDepartmentRowIds(item.id, childrenMap, seen, result)
