@@ -588,7 +588,6 @@ export class ReportsService {
     rootNames: string[],
   ) {
     const normalizedRoots = new Set(rootNames.map((name) => name.replace(/\s+/g, '')))
-    const itemMap = new Map(items.map((item) => [item.id, item]))
     const childrenMap = new Map<number | null, number[]>()
 
     for (const item of items) {
@@ -601,30 +600,13 @@ export class ReportsService {
     const result: number[] = []
 
     for (const item of items) {
-      if (!this.hasMatchingAncestorName(item.id, normalizedRoots, itemMap)) {
+      if (!normalizedRoots.has(item.name.replace(/\s+/g, ''))) {
         continue
       }
       this.collectDepartmentRowIds(item.id, childrenMap, seen, result)
     }
 
     return result
-  }
-
-  private hasMatchingAncestorName(
-    departmentId: number,
-    normalizedRoots: Set<string>,
-    itemMap: Map<number, { id: number; name: string; parentId: number | null; sort: number }>,
-  ) {
-    let current = itemMap.get(departmentId)
-
-    while (current) {
-      if (normalizedRoots.has(current.name.replace(/\s+/g, ''))) {
-        return true
-      }
-      current = current.parentId ? itemMap.get(current.parentId) : undefined
-    }
-
-    return false
   }
 
   private collectDepartmentRowIds(
