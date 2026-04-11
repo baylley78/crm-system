@@ -563,25 +563,25 @@ export class ReportsService {
     const result: number[] = []
 
     for (const rootName of rootNames) {
-      const node = this.findDepartmentNodeByName(items, rootName)
-      this.collectDepartmentIds(node ? [node] : [], seen, result)
+      const nodes = this.findDepartmentNodesByName(items, rootName)
+      this.collectDepartmentIds(nodes, seen, result)
     }
 
     return result
   }
 
-  private findDepartmentNodeByName(items: Array<{ id: number; name: string; children?: any[] }>, name: string): { id: number; name: string; children?: any[] } | null {
+  private findDepartmentNodesByName(items: Array<{ id: number; name: string; children?: any[] }>, name: string): Array<{ id: number; name: string; children?: any[] }> {
     const normalizedTarget = name.replace(/\s+/g, '')
+    const matched: Array<{ id: number; name: string; children?: any[] }> = []
+
     for (const item of items) {
       if (item.name.replace(/\s+/g, '') === normalizedTarget) {
-        return item
+        matched.push(item)
       }
-      const matchedChild = this.findDepartmentNodeByName(item.children || [], name)
-      if (matchedChild) {
-        return matchedChild
-      }
+      matched.push(...this.findDepartmentNodesByName(item.children || [], name))
     }
-    return null
+
+    return matched
   }
 
   private collectDepartmentIds(items: Array<{ id: number; children?: any[] }>, seen: Set<number>, result: number[]) {

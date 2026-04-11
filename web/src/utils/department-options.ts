@@ -10,18 +10,21 @@ export const flattenDepartments = (items: DepartmentTreeItem[], prefix = ''): De
     return [{ id: item.id, name: label }, ...flattenDepartments(item.children || [], label)]
   })
 
-export const findDepartmentNodeByName = (items: DepartmentTreeItem[], name: string): DepartmentTreeItem | null => {
+export const findDepartmentNodeByName = (items: DepartmentTreeItem[], name: string): DepartmentTreeItem | null =>
+  findDepartmentNodesByName(items, name)[0] || null
+
+export const findDepartmentNodesByName = (items: DepartmentTreeItem[], name: string): DepartmentTreeItem[] => {
   const normalizedTarget = normalizeDepartmentName(name)
+  const matched: DepartmentTreeItem[] = []
+
   for (const item of items) {
     if (normalizeDepartmentName(item.name) === normalizedTarget) {
-      return item
+      matched.push(item)
     }
-    const matchedChild = findDepartmentNodeByName(item.children || [], name)
-    if (matchedChild) {
-      return matchedChild
-    }
+    matched.push(...findDepartmentNodesByName(item.children || [], name))
   }
-  return null
+
+  return matched
 }
 
 export const flattenDepartmentSubtrees = (items: DepartmentTreeItem[], rootNames: string[]): DepartmentOption[] => {
@@ -29,13 +32,14 @@ export const flattenDepartmentSubtrees = (items: DepartmentTreeItem[], rootNames
   const options: DepartmentOption[] = []
 
   for (const rootName of rootNames) {
-    const node = findDepartmentNodeByName(items, rootName)
-    for (const option of flattenDepartments(node ? [node] : [])) {
-      if (seen.has(option.id)) {
-        continue
+    for (const node of findDepartmentNodesByName(items, rootName)) {
+      for (const option of flattenDepartments([node])) {
+        if (seen.has(option.id)) {
+          continue
+        }
+        seen.add(option.id)
+        options.push(option)
       }
-      seen.add(option.id)
-      options.push(option)
     }
   }
 
