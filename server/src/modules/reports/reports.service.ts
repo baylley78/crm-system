@@ -181,7 +181,11 @@ export class ReportsService {
       return { options: [] }
     }
 
-    const options = this.flattenDepartmentOptions(departmentTree)
+    const departments = await this.prisma.department.findMany({
+      select: { id: true, name: true, parentId: true, sort: true },
+      orderBy: [{ sort: 'asc' }, { id: 'asc' }],
+    })
+    const options = this.flattenDepartmentRows(departments)
       .filter((item) => allowedDepartmentIds.includes(item.id))
 
     return { options }
@@ -555,14 +559,29 @@ export class ReportsService {
     return date.toISOString().slice(0, 10)
   }
 
-  private flattenDepartmentOptions(
-    items: Array<{ id: number; name: string; children?: any[] }>,
-    prefix = '',
+  private flattenDepartmentRows(
+    items: Array<{ id: number; name: string; parentId: number | null; sort: number }>,
   ): ReportDepartmentOption[] {
-    return items.flatMap((item) => {
-      const label = prefix ? `${prefix} / ${item.name}` : item.name
-      return [{ id: item.id, name: label }, ...this.flattenDepartmentOptions(item.children || [], label)]
-    })
+    const itemMap = new Map(items.map((item) => [item.id, item]))
+    return items.map((item) => ({
+      id: item.id,
+      name: this.buildDepartmentPath(item.id, itemMap),
+    }))
+  }
+
+  private buildDepartmentPath(
+    departmentId: number,
+    itemMap: Map<number, { id: number; name: string; parentId: number | null; sort: number }>,
+  ) {
+    const names: string[] = []
+    let current = itemMap.get(departmentId)
+
+    while (current) {
+      names.unshift(current.name)
+      current = current.parentId ? itemMap.get(current.parentId) : undefined
+    }
+
+    return names.join(' / ')
   }
 
   private collectStageDepartmentIds(items: Array<{ id: number; name: string; children?: any[] }>, rootNames: string[]) {
