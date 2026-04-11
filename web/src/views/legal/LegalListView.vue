@@ -46,6 +46,16 @@ const total = ref(0)
 const users = ref<SalesUserOption[]>([])
 const dialogVisible = ref(false)
 const detailVisible = ref(false)
+const assignmentDialogVisible = ref(false)
+const assignmentSaving = ref(false)
+const assignmentForm = reactive<SaveLegalCasePayload>({
+  customerId: 0,
+  progressStatus: '',
+  stage: 'PENDING_ASSIGNMENT',
+  assistantUserId: undefined,
+  filingSpecialistUserId: undefined,
+  preTrialUserId: undefined,
+})
 const refundDialogVisible = ref(false)
 const refundDraft = ref<CreateRefundCasePayload | null>(null)
 const form = reactive<SaveLegalCasePayload>({
@@ -135,6 +145,29 @@ const openDialog = (item: LegalCaseItem) => {
   form.preTrialFollowRemark = item.preTrialFollowRemark || ''
   form.closeResult = item.closeResult || ''
   dialogVisible.value = true
+}
+
+const openAssignmentDialog = (item: LegalCaseItem) => {
+  activeCase.value = item
+  assignmentForm.customerId = item.customerId
+  assignmentForm.progressStatus = item.progressStatus || '处理中'
+  assignmentForm.stage = item.stage || 'PENDING_ASSIGNMENT'
+  assignmentForm.assistantUserId = item.assistantUserId
+  assignmentForm.filingSpecialistUserId = item.filingSpecialistUserId
+  assignmentForm.preTrialUserId = item.preTrialUserId
+  assignmentDialogVisible.value = true
+}
+
+const submitAssignment = async () => {
+  assignmentSaving.value = true
+  try {
+    await saveLegalCase(assignmentForm)
+    ElMessage.success('法务岗位已保存')
+    assignmentDialogVisible.value = false
+    await loadData()
+  } finally {
+    assignmentSaving.value = false
+  }
 }
 
 const submit = async () => {
@@ -255,7 +288,7 @@ onMounted(() => {
               <el-segmented v-model="selectedStage" :options="stageQuickOptions" @change="handleStageChange" />
             </div>
           </template>
-          <el-table v-loading="loading" :data="paginatedCases" highlight-current-row @current-change="selectCase" @row-click="selectCase">
+          <el-table v-loading="loading" :data="paginatedCases" highlight-current-row>
             <el-table-column label="客户编号" prop="customerNo" min-width="150" />
             <el-table-column label="客户姓名" prop="name" min-width="120" />
             <el-table-column label="手机号码" min-width="130">
@@ -272,16 +305,17 @@ onMounted(() => {
             <el-table-column label="操作" width="320">
               <template #default="scope">
                 <div class="action-cell compact-action-cell">
-                  <el-button v-if="canAssignLegal()" link type="warning" @click="openDialog(scope.row)">分配岗位</el-button>
+                  <el-button link type="info" @click.stop="selectCase(scope.row)">客户详情</el-button>
+                  <el-button v-if="canAssignLegal()" link type="warning" @click.stop="openAssignmentDialog(scope.row)">分配岗位</el-button>
                   <el-tooltip v-if="canOperateLegal()" :content="legalActionTip" placement="top">
-                    <el-button link type="primary" @click="openDialog(scope.row)">{{ legalActionLabel }}</el-button>
+                    <el-button link type="primary" @click.stop="openDialog(scope.row)">{{ legalActionLabel }}</el-button>
                   </el-tooltip>
-                  <el-button v-if="canCreateRefund()" link type="danger" :loading="refundingId === scope.row.customerId" @click="quickCreateRefund(scope.row)">申请退款</el-button>
+                  <el-button v-if="canCreateRefund()" link type="danger" :loading="refundingId === scope.row.customerId" @click.stop="quickCreateRefund(scope.row)">申请退款</el-button>
                   <el-tooltip v-if="canShowTransfer(scope.row)" content="法务流程已完成，可转入三销接待" placement="top">
-                    <el-button link type="success" :loading="transferringId === scope.row.customerId" @click="transferToThirdSales(scope.row)">移交三销</el-button>
+                    <el-button link type="success" :loading="transferringId === scope.row.customerId" @click.stop="transferToThirdSales(scope.row)">移交三销</el-button>
                   </el-tooltip>
                   <el-tooltip v-if="canDeleteCustomers()" content="删除客户" placement="top">
-                    <el-button link type="danger" :icon="Delete" @click="handleDeleteCustomer(scope.row)" />
+                    <el-button link type="danger" :icon="Delete" @click.stop="handleDeleteCustomer(scope.row)" />
                   </el-tooltip>
                 </div>
               </template>
@@ -473,6 +507,30 @@ onMounted(() => {
       </template>
       <el-empty v-else description="请选择法务案件" />
     </el-drawer>
+
+    <el-dialog v-model="assignmentDialogVisible" title="分配法务岗位" width="520px">
+      <el-form label-width="110px">
+        <el-form-item label="法务助理">
+          <el-select v-model="assignmentForm.assistantUserId" clearable style="width: 100%">
+            <el-option v-for="user in legalUsers" :key="user.id" :label="user.realName + '（' + user.roleName + '）'" :value="user.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="立案专员">
+          <el-select v-model="assignmentForm.filingSpecialistUserId" clearable style="width: 100%">
+            <el-option v-for="user in legalUsers" :key="user.id" :label="user.realName + '（' + user.roleName + '）'" :value="user.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="庭前负责人">
+          <el-select v-model="assignmentForm.preTrialUserId" clearable style="width: 100%">
+            <el-option v-for="user in legalUsers" :key="user.id" :label="user.realName + '（' + user.roleName + '）'" :value="user.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="assignmentDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="assignmentSaving" @click="submitAssignment">保存</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="dialogVisible" title="处理法务案件" width="720px">
       <el-form label-width="130px" class="form-grid">
