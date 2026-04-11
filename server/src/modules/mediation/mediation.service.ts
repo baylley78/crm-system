@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { CustomerStatus, FollowStage } from '@prisma/client'
 import { PrismaService } from '../../prisma/prisma.service'
 import type { AuthenticatedUser } from '../auth/auth.service'
@@ -7,6 +7,7 @@ import { FilesService } from '../files/files.service'
 import { SaveMediationCaseDto } from './dto/save-mediation-case.dto'
 
 const MEDIATION_ROLE_CODES = ['SUPER_ADMIN', 'AFTER_SALES_MANAGER', 'AFTER_SALES', 'MEDIATION_SPECIALIST', 'LEGAL_MANAGER', 'LEGAL', 'SECOND_SALES_MANAGER', 'SECOND_SALES_SUPERVISOR', 'SECOND_SALES']
+const RETURN_TO_SECOND_SALES_ROLE_CODES = ['MEDIATION_SPECIALIST', 'SECOND_SALES_SUPERVISOR']
 const DEFAULT_PAGE = 1
 const DEFAULT_PAGE_SIZE = 30
 const MEDIATION_TIME_EDIT_PERMISSION = 'mediation.time.edit'
@@ -19,15 +20,26 @@ export class MediationService {
     private readonly filesService: FilesService,
   ) {}
 
-  async findCases(currentUser: AuthenticatedUser, query?: { page?: number; pageSize?: number }) {
+  async findCases(currentUser: AuthenticatedUser, query?: { page?: number; pageSize?: number; returnedOnly?: boolean }) {
     const page = query?.page ?? DEFAULT_PAGE
     const pageSize = query?.pageSize ?? DEFAULT_PAGE_SIZE
     const skip = (page - 1) * pageSize
     const where = {
       ...(await this.customersService.buildCustomerVisibilityWhere(currentUser)),
-      currentStatus: {
-        in: [CustomerStatus.PENDING_MEDIATION, CustomerStatus.MEDIATION_PROCESSING, CustomerStatus.MEDIATION_COMPLETED],
-      },
+      currentStatus: query?.returnedOnly
+        ? CustomerStatus.SECOND_SALES_FOLLOWING
+        : {
+            in: [CustomerStatus.PENDING_MEDIATION, CustomerStatus.MEDIATION_PROCESSING, CustomerStatus.MEDIATION_COMPLETED],
+          },
+      ...(query?.returnedOnly
+        ? {
+            mediationCases: {
+              some: {
+                mediationResult: '转回二销',
+              },
+            },
+          }
+        : {}),
     }
 
     const [customers, total] = await this.prisma.$transaction([
@@ -99,6 +111,7 @@ export class MediationService {
           firstSalesPaymentScreenshotUrl: this.filesService.toAccessUrl(latestFirstSalesOrder?.paymentScreenshotUrl),
           firstSalesChatRecordUrl: this.filesService.toAccessUrl(customer.firstSalesChatRecordUrl),
           firstSalesEvidenceFileUrls,
+          isReturnedToSecondSales: latestCase?.mediationResult === '转回二销',
         }
       }),
       total,
@@ -136,6 +149,10 @@ export class MediationService {
 
     if (!customer) {
       throw new NotFoundException('客户不存在')
+    }
+
+    if (dto.returnTarget === 'SECOND_SALES') {
+      return this.returnToSecondSales(currentUser, customer, dto, files)
     }
 
     const assigneeId = dto.ownerId ?? customer.currentOwnerId ?? customer.mediationCases[0]?.ownerId ?? currentUser.id
@@ -202,6 +219,86 @@ export class MediationService {
     return { success: true }
   }
 
+  private async returnToSecondSales(
+    currentUser: AuthenticatedUser,
+    customer: {
+      id: number
+      currentStatus: CustomerStatus
+      currentOwnerId: number | null
+      secondSalesUserId: number | null
+      remark: string | null
+      mediationCases: Array<{ id: number; ownerId: number; startDate: Date | null }>
+    },
+    dto: SaveMediationCaseDto,
+    files?: {
+      evidenceFiles?: Array<{ filename: string }>
+    },
+  ) {
+    const operator = await this.prisma.user.findUnique({ where: { id: currentUser.id }, include: { role: true } })
+    if (!operator || !RETURN_TO_SECOND_SALES_ROLE_CODES.includes(operator.role.code)) {
+      throw new BadRequestException('暂无转回权限')
+    }
+
+    if (!customer.secondSalesUserId) {
+      throw new BadRequestException('该客户暂无二销接待，无法转回')
+    }
+
+    const latestCase = customer.mediationCases[0]
+    const evidenceFileUrls = files?.evidenceFiles?.length
+      ? JSON.stringify(files.evidenceFiles.map((file) => `/uploads/${file.filename}`))
+      : dto.evidenceFileUrls
+    const startDate = this.resolveStartDate(currentUser, dto.startDate, latestCase?.startDate)
+
+    await this.prisma.$transaction(async (tx) => {
+      if (latestCase) {
+        await tx.mediationCase.update({
+          where: { id: latestCase.id },
+          data: {
+            ownerId: latestCase.ownerId,
+            progressStatus: dto.progressStatus,
+            mediationResult: '转回二销',
+            remark: dto.remark,
+            evidenceFileUrls,
+            startDate,
+            finishDate: new Date(),
+          },
+        })
+      } else {
+        await tx.mediationCase.create({
+          data: {
+            customerId: dto.customerId,
+            ownerId: customer.currentOwnerId ?? currentUser.id,
+            progressStatus: dto.progressStatus,
+            mediationResult: '转回二销',
+            remark: dto.remark,
+            evidenceFileUrls,
+            startDate,
+            finishDate: new Date(),
+          },
+        })
+      }
+
+      await tx.customerFollowLog.create({
+        data: {
+          customerId: dto.customerId,
+          operatorId: currentUser.id,
+          stage: FollowStage.MEDIATION,
+          content: this.buildReturnFollowContent(dto),
+        },
+      })
+
+      await tx.customer.update({
+        where: { id: dto.customerId },
+        data: {
+          currentOwnerId: customer.secondSalesUserId,
+          currentStatus: CustomerStatus.SECOND_SALES_FOLLOWING,
+        },
+      })
+    })
+
+    return { success: true }
+  }
+
   private resolveStartDate(currentUser: AuthenticatedUser, input?: string, fallback?: Date | null) {
     if (!input) {
       return fallback ?? new Date()
@@ -243,6 +340,16 @@ export class MediationService {
       ownerName ? `负责人：${ownerName}` : '',
       dto.progressStatus?.trim() ? `进度：${dto.progressStatus.trim()}` : '',
       dto.mediationResult?.trim() ? `结果：${dto.mediationResult.trim()}` : '',
+      dto.remark?.trim() ? `备注：${dto.remark.trim()}` : '',
+    ].filter(Boolean)
+
+    return parts.join('；')
+  }
+
+  private buildReturnFollowContent(dto: SaveMediationCaseDto) {
+    const parts = [
+      '调解转回二销',
+      dto.progressStatus?.trim() ? `进度：${dto.progressStatus.trim()}` : '',
       dto.remark?.trim() ? `备注：${dto.remark.trim()}` : '',
     ].filter(Boolean)
 

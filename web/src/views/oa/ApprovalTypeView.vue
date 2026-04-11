@@ -3,6 +3,7 @@ import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { actionApproval, createApproval, fetchApprovals, payApproval } from '../../api/approvals'
 import { authStorage } from '../../auth'
+import { useAttachmentPreview } from '../../composables/useAttachmentPreview'
 import { hasPermission } from '../../utils/permissions'
 import type { ApprovalActionPayload, ApprovalCreatePayload, ApprovalListItem, ApprovalListResponse, ApprovalQueryParams } from '../../types'
 
@@ -33,6 +34,16 @@ const dialogVisible = ref(false)
 const currentApproval = ref<ApprovalListItem | null>(null)
 const dateRange = ref<[string, string] | []>([])
 const quickRange = ref<'' | 'DAY' | 'WEEK' | 'MONTH'>('')
+const {
+  visible: attachmentPreviewVisible,
+  title: attachmentPreviewTitle,
+  imageUrl: attachmentPreviewImageUrl,
+  fileUrl: attachmentPreviewFileUrl,
+  hasImage: attachmentPreviewHasImage,
+  hasFile: attachmentPreviewHasFile,
+  openPreview: openAttachmentPreview,
+  closePreview: closeAttachmentPreview,
+} = useAttachmentPreview('凭证预览')
 const form = reactive<ApprovalCreatePayload>({
   approvalType: props.approvalType,
   title: '',
@@ -253,6 +264,14 @@ const setQuickRange = async (value: '' | 'DAY' | 'WEEK' | 'MONTH') => {
   await loadApprovals()
 }
 
+const openVoucherPreview = (url?: string) => {
+  if (!url) {
+    ElMessage.warning('凭证地址无效')
+    return
+  }
+  openAttachmentPreview(url, '报销凭证')
+}
+
 const handleDateRangeChange = async () => {
   if (dateRange.value.length === 2) {
     quickRange.value = ''
@@ -269,7 +288,7 @@ onMounted(loadApprovals)
       <template #header>
         <div class="toolbar-row">
           <span>{{ title }}</span>
-          <el-button v-if="canCreateApproval()" type="primary" @click="drawerVisible = true">发起申请</el-button>
+          <el-button v-if="canCreateApproval()" type="primary" @click="drawerVisible = true">发起</el-button>
         </div>
       </template>
 
@@ -277,18 +296,18 @@ onMounted(loadApprovals)
         <div class="filter-stack">
           <el-space wrap>
             <el-button-group>
-              <el-button :type="reimbursementStatus === 'ALL' ? 'primary' : 'default'" @click="reimbursementStatus = 'ALL'; loadApprovals()">全部申请</el-button>
-              <el-button :type="reimbursementStatus === 'PENDING' ? 'primary' : 'default'" @click="reimbursementStatus = 'PENDING'; loadApprovals()">待审批</el-button>
-              <el-button :type="reimbursementStatus === 'PROCESSED' ? 'primary' : 'default'" @click="reimbursementStatus = 'PROCESSED'; loadApprovals()">已经审批</el-button>
-              <el-button :type="reimbursementStatus === 'UNPAID' ? 'primary' : 'default'" @click="reimbursementStatus = 'UNPAID'; loadApprovals()">待打款</el-button>
-              <el-button :type="reimbursementStatus === 'PAID' ? 'primary' : 'default'" @click="reimbursementStatus = 'PAID'; loadApprovals()">已打款</el-button>
+              <el-button :type="reimbursementStatus === 'ALL' ? 'primary' : 'default'" @click="reimbursementStatus = 'ALL'; loadApprovals()">全部</el-button>
+              <el-button :type="reimbursementStatus === 'PENDING' ? 'primary' : 'default'" @click="reimbursementStatus = 'PENDING'; loadApprovals()">待审</el-button>
+              <el-button :type="reimbursementStatus === 'PROCESSED' ? 'primary' : 'default'" @click="reimbursementStatus = 'PROCESSED'; loadApprovals()">已审</el-button>
+              <el-button :type="reimbursementStatus === 'UNPAID' ? 'primary' : 'default'" @click="reimbursementStatus = 'UNPAID'; loadApprovals()">待打</el-button>
+              <el-button :type="reimbursementStatus === 'PAID' ? 'primary' : 'default'" @click="reimbursementStatus = 'PAID'; loadApprovals()">已打</el-button>
             </el-button-group>
           </el-space>
           <el-space wrap>
             <el-button :type="quickRange === 'DAY' ? 'primary' : 'default'" @click="setQuickRange('DAY')">日</el-button>
             <el-button :type="quickRange === 'WEEK' ? 'primary' : 'default'" @click="setQuickRange('WEEK')">周</el-button>
             <el-button :type="quickRange === 'MONTH' ? 'primary' : 'default'" @click="setQuickRange('MONTH')">月</el-button>
-            <el-button @click="setQuickRange('')">清空快捷</el-button>
+            <el-button @click="setQuickRange('')">清空</el-button>
             <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" @change="handleDateRangeChange" />
           </el-space>
         </div>
@@ -302,9 +321,9 @@ onMounted(loadApprovals)
       <el-card shadow="never">
         <template #header>审批列表</template>
         <el-tabs v-if="props.approvalType !== 'REIMBURSEMENT'" v-model="activeTab">
-          <el-tab-pane label="我的申请" name="my" />
-          <el-tab-pane label="待审批" name="pending" />
-          <el-tab-pane label="已审批" name="processed" />
+          <el-tab-pane label="我的" name="my" />
+          <el-tab-pane label="待审" name="pending" />
+          <el-tab-pane label="已审" name="processed" />
         </el-tabs>
 
         <el-table v-loading="loading" :data="currentList">
@@ -353,7 +372,8 @@ onMounted(loadApprovals)
             <template #default="scope">
               <el-button v-if="scope.row.canApprove && canReviewApproval()" link type="primary" @click="openActionDialog(scope.row, 'APPROVE')">通过</el-button>
               <el-button v-if="scope.row.canApprove && canReviewApproval()" link type="danger" @click="openActionDialog(scope.row, 'REJECT')">驳回</el-button>
-              <el-button v-if="props.approvalType === 'REIMBURSEMENT' && scope.row.status === 'APPROVED' && scope.row.paymentStatus === 'UNPAID' && canPayApproval()" link type="success" @click="openPayDialog(scope.row)">标记已打款</el-button>
+              <el-button v-if="props.approvalType === 'REIMBURSEMENT' && scope.row.reimbursementVoucherUrl" link type="primary" @click="openVoucherPreview(scope.row.reimbursementVoucherUrl)">凭证</el-button>
+              <el-button v-if="props.approvalType === 'REIMBURSEMENT' && scope.row.status === 'APPROVED' && scope.row.paymentStatus === 'UNPAID' && canPayApproval()" link type="success" @click="openPayDialog(scope.row)">打款</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -390,7 +410,7 @@ onMounted(loadApprovals)
             </el-form-item>
             <el-form-item label="报销凭证" class="full-width">
               <el-upload :auto-upload="false" :limit="1" :show-file-list="true" :on-change="(file: any) => { form.reimbursementVoucher = file.raw || null }" :on-remove="() => { form.reimbursementVoucher = null }">
-                <el-button>上传凭证</el-button>
+                <el-button>上传</el-button>
               </el-upload>
             </el-form-item>
           </template>
@@ -414,10 +434,18 @@ onMounted(loadApprovals)
         </el-form-item>
         <el-form-item class="full-width drawer-actions">
           <el-button @click="resetForm">重置</el-button>
-          <el-button type="primary" :loading="saving" @click="submit">提交申请</el-button>
+          <el-button type="primary" :loading="saving" @click="submit">提交</el-button>
         </el-form-item>
       </el-form>
     </el-drawer>
+
+    <el-dialog v-model="attachmentPreviewVisible" :title="attachmentPreviewTitle" width="800px" @closed="closeAttachmentPreview">
+      <div class="page-stack-sm">
+        <img v-if="attachmentPreviewHasImage" :src="attachmentPreviewImageUrl" :alt="attachmentPreviewTitle" class="attachment-preview" />
+        <iframe v-else-if="attachmentPreviewHasFile" :src="attachmentPreviewFileUrl" class="attachment-file-frame" />
+        <el-empty v-else description="暂无可预览凭证" />
+      </div>
+    </el-dialog>
 
     <el-dialog v-model="dialogVisible" :title="props.approvalType === 'REIMBURSEMENT' && currentApproval?.status === 'APPROVED' && currentApproval?.paymentStatus === 'UNPAID' && canPayApproval() ? '标记已打款' : actionForm.action === 'APPROVE' ? '通过审批' : '驳回审批'" width="520px">
       <el-form label-width="110px">
@@ -500,5 +528,17 @@ onMounted(loadApprovals)
   gap: 4px;
   font-size: 12px;
   color: var(--el-text-color-regular);
+}
+
+.attachment-preview {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.attachment-file-frame {
+  width: 100%;
+  height: 70vh;
+  border: none;
 }
 </style>

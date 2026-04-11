@@ -2,7 +2,7 @@
 import { Delete, Document } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref, watch, computed } from 'vue'
-import { getFileName, isImageFile, toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
+import { getFileName, isImageFile, toAbsoluteFileUrl, useAttachmentPreview } from '../../composables/useAttachmentPreview'
 import { hasPermission, formatPhone } from '../../utils/permissions'
 import { completeMediationCase, fetchMediationCases, fetchMediationUsers, followMediationCase } from '../../api/mediation'
 import { deleteCustomer } from '../../api/customers'
@@ -16,8 +16,9 @@ const canCompleteMediation = () => hasPermission('mediation.complete')
 const canCreateRefund = () => hasPermission('refund.create')
 const canDeleteCustomers = () => hasPermission('customers.delete')
 
-type MediationActionType = 'FOLLOW' | 'COMPLETE'
+type MediationActionType = 'FOLLOW' | 'COMPLETE' | 'RETURN'
 
+type MediationListFilter = 'ALL' | 'RETURNED'
 const loading = ref(false)
 const saving = ref(false)
 const cases = ref<MediationCaseItem[]>([])
@@ -31,9 +32,21 @@ const actionDialogVisible = ref(false)
 const actionType = ref<MediationActionType>('FOLLOW')
 const editingCase = ref<MediationCaseItem | null>(null)
 const activeTab = ref<'pending' | 'processing' | 'completed'>('pending')
+const listFilter = ref<MediationListFilter>('ALL')
 const currentPage = ref(1)
 const pageSize = ref(30)
 const pageSizeOptions = [30, 50, 100]
+const {
+  visible: attachmentPreviewVisible,
+  title: attachmentPreviewTitle,
+  imageUrl: attachmentPreviewImageUrl,
+  fileUrl: attachmentPreviewFileUrl,
+  hasImage: attachmentPreviewHasImage,
+  hasFile: attachmentPreviewHasFile,
+  openPreview: openAttachmentPreview,
+  closePreview: closeAttachmentPreview,
+} = useAttachmentPreview('附件预览')
+
 const form = reactive<SaveMediationCasePayload>({
   customerId: 0,
   progressStatus: '',
@@ -63,32 +76,34 @@ const syncActiveCase = (caseList: MediationCaseItem[]) => {
 
 const canPreviewAttachment = (url?: string) => Boolean(toAbsoluteFileUrl(url))
 
-const openAttachment = (url?: string) => {
+const openAttachment = (url?: string, title = '附件预览') => {
   const absoluteUrl = toAbsoluteFileUrl(url)
   if (!absoluteUrl) {
     ElMessage.warning('附件地址无效')
     return
   }
-  window.open(absoluteUrl, '_blank', 'noopener')
+  openAttachmentPreview(url, title)
 }
 
 const loadData = async () => {
   loading.value = true
   try {
     const [caseResult, userList] = await Promise.all([
-      fetchMediationCases({ page: currentPage.value, pageSize: pageSize.value }),
+      fetchMediationCases({ page: currentPage.value, pageSize: pageSize.value, returnedOnly: listFilter.value === 'RETURNED' }),
       fetchMediationUsers(),
     ])
     cases.value = caseResult.items
     total.value = caseResult.total
     users.value = userList
 
-    if (activeTab.value === 'pending' && !pendingCases.value.length) {
-      activeTab.value = processingCases.value.length ? 'processing' : completedCases.value.length ? 'completed' : 'pending'
-    } else if (activeTab.value === 'processing' && !processingCases.value.length) {
-      activeTab.value = pendingCases.value.length ? 'pending' : completedCases.value.length ? 'completed' : 'processing'
-    } else if (activeTab.value === 'completed' && !completedCases.value.length) {
-      activeTab.value = pendingCases.value.length ? 'pending' : processingCases.value.length ? 'processing' : 'completed'
+    if (listFilter.value === 'ALL') {
+      if (activeTab.value === 'pending' && !pendingCases.value.length) {
+        activeTab.value = processingCases.value.length ? 'processing' : completedCases.value.length ? 'completed' : 'pending'
+      } else if (activeTab.value === 'processing' && !processingCases.value.length) {
+        activeTab.value = pendingCases.value.length ? 'pending' : completedCases.value.length ? 'completed' : 'processing'
+      } else if (activeTab.value === 'completed' && !completedCases.value.length) {
+        activeTab.value = pendingCases.value.length ? 'pending' : processingCases.value.length ? 'processing' : 'completed'
+      }
     }
 
     syncActiveCase(activeCases.value)
@@ -117,8 +132,12 @@ const formatStatus = (status: string) => {
 const pendingCases = computed(() => cases.value.filter((item) => canPendingStatus(item.currentStatus)))
 const processingCases = computed(() => cases.value.filter((item) => canProcessingStatus(item.currentStatus)))
 const completedCases = computed(() => cases.value.filter((item) => canCompletedStatus(item.currentStatus)))
+const returnedCases = computed(() => cases.value.filter((item) => item.isReturnedToSecondSales))
 const sortedPendingCases = computed(() => [...pendingCases.value].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')))
 const activeCases = computed(() => {
+  if (listFilter.value === 'RETURNED') {
+    return returnedCases.value
+  }
   if (activeTab.value === 'pending') {
     return sortedPendingCases.value
   }
@@ -137,6 +156,7 @@ const resetForm = () => {
   form.startDate = ''
   form.isCompleted = false
   form.ownerId = undefined
+  form.returnTarget = undefined
 }
 
 const fillForm = (item: MediationCaseItem, type: MediationActionType) => {
@@ -148,13 +168,24 @@ const fillForm = (item: MediationCaseItem, type: MediationActionType) => {
   form.startDate = item.startDate ? item.startDate.slice(0, 16) : ''
   form.isCompleted = type === 'COMPLETE'
   form.ownerId = item.ownerId
+  form.returnTarget = type === 'RETURN' ? 'SECOND_SALES' : undefined
 }
 
 const selectCase = (item: MediationCaseItem | null) => {
   activeCase.value = item
 }
 
+const canReturnToSecondSales = (item: MediationCaseItem) => {
+  if (item.isReturnedToSecondSales || !item.secondSalesUserId) {
+    return false
+  }
+  return canEditMediation() && (canProcessingStatus(item.currentStatus) || canCompletedStatus(item.currentStatus))
+}
+
 const rowClassName = ({ row }: { row: MediationCaseItem }) => {
+  if (row.isReturnedToSecondSales) {
+    return 'row-returned-mediation'
+  }
   return canPendingStatus(row.currentStatus) ? 'row-pending-mediation' : ''
 }
 
@@ -214,6 +245,10 @@ const isActionDirty = () => {
     return false
   }
 
+  if (actionType.value === 'RETURN') {
+    return false
+  }
+
   return form.progressStatus !== (editingCase.value.progressStatus || (canPendingStatus(editingCase.value.currentStatus) ? '待接手' : '调解处理中'))
     || form.mediationResult !== (editingCase.value.mediationResult || '')
     || form.remark !== (editingCase.value.remark || '')
@@ -262,12 +297,13 @@ const submit = async () => {
 
   saving.value = true
   try {
-    const payload = {
+    const payload: SaveMediationCasePayload = {
       ...form,
       progressStatus: form.progressStatus.trim(),
       mediationResult: form.mediationResult?.trim(),
       remark: form.remark?.trim(),
       isCompleted: actionType.value === 'COMPLETE',
+      returnTarget: actionType.value === 'RETURN' ? 'SECOND_SALES' : undefined,
     }
 
     if (actionType.value === 'COMPLETE') {
@@ -275,7 +311,13 @@ const submit = async () => {
       ElMessage.success('调解已完结')
     } else {
       await followMediationCase(payload)
-      ElMessage.success(canPendingStatus(editingCase.value?.currentStatus || '') ? '已接手并进入调解处理中' : '调解跟进已提交')
+      ElMessage.success(
+        actionType.value === 'RETURN'
+          ? '已转回二销'
+          : canPendingStatus(editingCase.value?.currentStatus || '')
+            ? '已接手并进入调解处理中'
+            : '调解跟进已提交',
+      )
     }
     actionDialogVisible.value = false
     await loadData()
@@ -292,6 +334,11 @@ watch(pageSize, async () => {
 })
 
 watch(currentPage, async () => {
+  await loadData()
+})
+
+watch(listFilter, async () => {
+  currentPage.value = 1
   await loadData()
 })
 
@@ -316,9 +363,10 @@ onMounted(async () => {
           <template #header>
             <div class="card-header-row">
               <span>调解案件列表</span>
+              <el-segmented v-model="listFilter" :options="[{ label: '全部', value: 'ALL' }, { label: '转回', value: 'RETURNED' }]" />
             </div>
           </template>
-          <el-tabs v-model="activeTab">
+          <el-tabs v-if="listFilter === 'ALL'" v-model="activeTab">
             <el-tab-pane :label="`待转调解 (${pendingCases.length})`" name="pending" />
             <el-tab-pane :label="`调解处理中 (${processingCases.length})`" name="processing" />
             <el-tab-pane :label="`调解完成 (${completedCases.length})`" name="completed" />
@@ -341,17 +389,19 @@ onMounted(async () => {
             <el-table-column label="调解进度" prop="progressStatus" min-width="140" />
             <el-table-column label="提醒" min-width="100">
               <template #default="scope">
-                <el-tag v-if="canPendingStatus(scope.row.currentStatus)" type="warning">待接手</el-tag>
+                <el-tag v-if="scope.row.isReturnedToSecondSales" type="success">已转回</el-tag>
+                <el-tag v-else-if="canPendingStatus(scope.row.currentStatus)" type="warning">待接手</el-tag>
                 <span v-else>-</span>
               </template>
             </el-table-column>
             <el-table-column label="操作" min-width="220" fixed="right">
               <template #default="scope">
                 <div class="action-cell compact-action-cell">
-                  <el-button v-if="canPendingStatus(scope.row.currentStatus) && canAssignMediation()" type="primary" link @click.stop="openActionDialog(scope.row, 'FOLLOW')">分配跟进</el-button>
+                  <el-button v-if="canPendingStatus(scope.row.currentStatus) && canAssignMediation()" type="primary" link @click.stop="openActionDialog(scope.row, 'FOLLOW')">分配</el-button>
                   <el-button v-else-if="canEditMediation()" type="primary" link @click.stop="openActionDialog(scope.row, 'FOLLOW')">跟进</el-button>
-                  <el-button v-if="canCompleteMediation()" type="success" link :disabled="scope.row.isCompleted" @click.stop="openActionDialog(scope.row, 'COMPLETE')">完结</el-button>
-                  <el-button v-if="canCreateRefund()" type="danger" link :loading="refundingId === scope.row.customerId" @click.stop="quickCreateRefund(scope.row)">申请退款</el-button>
+                  <el-button v-if="canReturnToSecondSales(scope.row)" type="warning" link @click.stop="openActionDialog(scope.row, 'RETURN')">转回</el-button>
+                  <el-button v-if="canCompleteMediation()" type="success" link :disabled="scope.row.isCompleted || scope.row.isReturnedToSecondSales" @click.stop="openActionDialog(scope.row, 'COMPLETE')">完结</el-button>
+                  <el-button v-if="canCreateRefund()" type="danger" link :loading="refundingId === scope.row.customerId" @click.stop="quickCreateRefund(scope.row)">退款</el-button>
                   <el-tooltip v-if="canDeleteCustomers()" content="删除客户" placement="top">
                     <el-button link type="danger" :icon="Delete" @click.stop="handleDeleteCustomer(scope.row)" />
                   </el-tooltip>
@@ -405,7 +455,7 @@ onMounted(async () => {
                         :src="toAbsoluteFileUrl(activeCase.firstSalesPaymentScreenshotUrl)"
                         alt="一销付款截图"
                         class="attachment-thumbnail"
-                        @click="openAttachment(activeCase.firstSalesPaymentScreenshotUrl)"
+                        @click="openAttachment(activeCase.firstSalesPaymentScreenshotUrl, '付款截图')"
                       />
                     </div>
                     <el-empty v-else description="暂无付款截图" />
@@ -419,9 +469,9 @@ onMounted(async () => {
                         :src="toAbsoluteFileUrl(activeCase.firstSalesChatRecordUrl)"
                         alt="一销聊天记录"
                         class="attachment-thumbnail"
-                        @click="openAttachment(activeCase.firstSalesChatRecordUrl)"
+                        @click="openAttachment(activeCase.firstSalesChatRecordUrl, '聊天记录')"
                       />
-                      <el-button v-else text class="file-chip" @click="openAttachment(activeCase.firstSalesChatRecordUrl)">
+                      <el-button v-else text class="file-chip" @click="openAttachment(activeCase.firstSalesChatRecordUrl, '聊天记录')">
                         <el-icon><Document /></el-icon>
                         <span>{{ getFileName(activeCase.firstSalesChatRecordUrl) }}</span>
                       </el-button>
@@ -438,9 +488,9 @@ onMounted(async () => {
                           :src="toAbsoluteFileUrl(item)"
                           :alt="`一销证据${index + 1}`"
                           class="attachment-thumbnail"
-                          @click="openAttachment(item)"
+                          @click="openAttachment(item, `一销证据${index + 1}`)"
                         />
-                        <el-button v-else text class="file-chip" @click="openAttachment(item)">
+                        <el-button v-else text class="file-chip" @click="openAttachment(item, `一销证据${index + 1}`)">
                           <el-icon><Document /></el-icon>
                           <span>{{ getFileName(item) }}</span>
                         </el-button>
@@ -459,7 +509,7 @@ onMounted(async () => {
 
     <el-dialog
       v-model="actionDialogVisible"
-      :title="actionType === 'COMPLETE' ? '完结调解' : canPendingStatus(editingCase?.currentStatus || '') ? '分配调解人员并跟进' : '调解跟进'"
+      :title="actionType === 'COMPLETE' ? '完结调解' : actionType === 'RETURN' ? '转回二销' : canPendingStatus(editingCase?.currentStatus || '') ? '分配调解人员并跟进' : '调解跟进'"
       width="720px"
       :close-on-click-modal="false"
       :close-on-press-escape="false"
@@ -494,7 +544,7 @@ onMounted(async () => {
             <div class="static-text">{{ editingCase ? formatStatus(editingCase.currentStatus) : '-' }}</div>
           </el-form-item>
           <el-form-item label="调解负责人">
-            <el-select v-model="form.ownerId" clearable filterable placeholder="请选择调解专员" style="width: 100%">
+            <el-select v-model="form.ownerId" clearable filterable placeholder="请选择调解专员" style="width: 100%" :disabled="actionType === 'RETURN'">
               <el-option v-for="user in users" :key="user.id" :label="`${user.realName}（${user.roleName}）`" :value="user.id" />
             </el-select>
             <div class="field-tip">待转调解客户可在这里直接分配到对应调解人员名下。</div>
@@ -503,7 +553,7 @@ onMounted(async () => {
             <el-input v-model="form.progressStatus" placeholder="请输入调解进度" />
           </el-form-item>
           <el-form-item label="调解结果">
-            <el-input v-model="form.mediationResult" placeholder="请输入调解结果" />
+            <el-input v-model="form.mediationResult" placeholder="请输入调解结果" :disabled="actionType === 'RETURN'" />
           </el-form-item>
           <el-form-item v-if="canEditMediationTime()" label="开始时间">
             <el-date-picker v-model="form.startDate" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="请选择调解开始时间" style="width: 100%" />
@@ -511,7 +561,7 @@ onMounted(async () => {
         </div>
 
         <el-form-item label="处理备注" class="full-width">
-          <el-input v-model="form.remark" type="textarea" :rows="4" placeholder="请输入调解接待说明、跟进记录或处理备注" />
+          <el-input v-model="form.remark" type="textarea" :rows="4" :placeholder="actionType === 'RETURN' ? '请输入转回原因或补充说明' : '请输入调解接待说明、跟进记录或处理备注'" />
         </el-form-item>
 
         <el-form-item label="补充证据" class="full-width">
@@ -519,15 +569,25 @@ onMounted(async () => {
             <div>拖拽文件到此处，或点击上传调解证据</div>
           </el-upload>
           <div v-if="editingCase?.evidenceFileUrls?.length" class="evidence-links">
-            <el-link v-for="url in editingCase.evidenceFileUrls" :key="url" :href="url" target="_blank" type="primary">查看已有证据</el-link>
+            <el-link v-for="url in editingCase.evidenceFileUrls" :key="url" type="primary" @click.prevent="openAttachment(url, '调解证据')">查看证据</el-link>
           </div>
         </el-form-item>
 
         <el-form-item class="full-width dialog-actions">
           <el-button @click="actionDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="submit">{{ actionType === 'COMPLETE' ? '确认完结' : '提交跟进' }}</el-button>
+          <el-button type="primary" :loading="saving" @click="submit">
+            {{ actionType === 'COMPLETE' ? '完结' : actionType === 'RETURN' ? '转回' : '提交' }}
+          </el-button>
         </el-form-item>
       </el-form>
+    </el-dialog>
+
+    <el-dialog v-model="attachmentPreviewVisible" :title="attachmentPreviewTitle" width="800px" @closed="closeAttachmentPreview">
+      <div class="page-stack-sm">
+        <img v-if="attachmentPreviewHasImage" :src="attachmentPreviewImageUrl" :alt="attachmentPreviewTitle" class="attachment-preview" />
+        <iframe v-else-if="attachmentPreviewHasFile" :src="attachmentPreviewFileUrl" class="attachment-file-frame" />
+        <el-empty v-else description="暂无可预览附件" />
+      </div>
     </el-dialog>
 
     <RefundCreateDialog v-model:visible="refundDialogVisible" :draft="refundDraft" @success="loadData" />
@@ -569,6 +629,14 @@ onMounted(async () => {
 
 :deep(.row-pending-mediation:hover > td.el-table__cell) {
   background-color: #ffefcc !important;
+}
+
+:deep(.row-returned-mediation) {
+  --el-table-tr-bg-color: #f0f9eb;
+}
+
+:deep(.row-returned-mediation:hover > td.el-table__cell) {
+  background-color: #e1f3d8 !important;
 }
 
 .attachment-section {
@@ -671,5 +739,17 @@ onMounted(async () => {
 
 .dialog-actions :deep(.el-form-item__content) {
   justify-content: flex-end;
+}
+
+.attachment-preview {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.attachment-file-frame {
+  width: 100%;
+  height: 70vh;
+  border: none;
 }
 </style>

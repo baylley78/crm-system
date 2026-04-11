@@ -9,8 +9,8 @@ import { SaveMediationCaseDto } from './dto/save-mediation-case.dto'
 import { FileFieldsInterceptor } from '@nestjs/platform-express'
 import { diskStorage } from 'multer'
 import { extname } from 'path'
-import { Type } from 'class-transformer'
-import { IsInt, IsOptional, Max, Min } from 'class-validator'
+import { Transform, Type } from 'class-transformer'
+import { IsBoolean, IsInt, IsOptional, Max, Min } from 'class-validator'
 
 const MEDIATION_UPLOAD_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
 const MEDIATION_UPLOAD_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.pdf']
@@ -28,6 +28,11 @@ class QueryMediationCasesDto {
   @Min(1)
   @Max(100)
   pageSize?: number
+
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  returnedOnly?: boolean
 }
 
 const createMediationUploadOptions = () => ({

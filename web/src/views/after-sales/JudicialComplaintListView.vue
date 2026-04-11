@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { ElMessage } from 'element-plus'
 import { onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchJudicialComplaintCaseDetail, fetchJudicialComplaintCases } from '../../api/judicial-complaints'
 import { hasPermission, formatPhone } from '../../utils/permissions'
-import { toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
+import { useAttachmentPreview } from '../../composables/useAttachmentPreview'
 import type { JudicialComplaintCaseFilters, JudicialComplaintCaseItem } from '../../types'
 import JudicialComplaintCreateDialog from './JudicialComplaintCreateDialog.vue'
 
@@ -20,6 +21,16 @@ const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(30)
 const pageSizeOptions = [30, 50, 100]
+const {
+  visible: attachmentPreviewVisible,
+  title: attachmentPreviewTitle,
+  imageUrl: attachmentPreviewImageUrl,
+  fileUrl: attachmentPreviewFileUrl,
+  hasImage: attachmentPreviewHasImage,
+  hasFile: attachmentPreviewHasFile,
+  openPreview: openAttachmentPreview,
+  closePreview: closeAttachmentPreview,
+} = useAttachmentPreview('截图预览')
 
 const filters = reactive<JudicialComplaintCaseFilters>({
   handlingStatus: '',
@@ -83,11 +94,11 @@ const goToQuality = async (item: JudicialComplaintCaseItem) => {
 }
 
 const openQualityScreenshot = (url?: string) => {
-  const absoluteUrl = toAbsoluteFileUrl(url)
-  if (!absoluteUrl) {
+  if (!url) {
+    ElMessage.warning('截图地址无效')
     return
   }
-  window.open(absoluteUrl, '_blank', 'noopener')
+  openAttachmentPreview(url, '质检截图')
 }
 
 const handleCreateSuccess = async () => {
@@ -116,7 +127,7 @@ onMounted(loadData)
             <el-select v-model="filters.handlingStatus" placeholder="处理状态" clearable style="width: 160px" @change="loadData">
               <el-option v-for="item in handlingStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
-            <el-button v-if="canCreateComplaint()" type="primary" @click="creatingDialogVisible = true">新建司法投诉</el-button>
+            <el-button v-if="canCreateComplaint()" type="primary" @click="creatingDialogVisible = true">新建</el-button>
           </el-space>
         </div>
       </template>
@@ -174,7 +185,7 @@ onMounted(loadData)
           <template #header>
             <div class="card-header-row">
               <span>投诉详情</span>
-              <el-button v-if="activeCase && !activeCase.qualityChecked && canCreateQuality()" type="primary" link @click="goToQuality(activeCase)">发起质检</el-button>
+              <el-button v-if="activeCase && !activeCase.qualityChecked && canCreateQuality()" type="primary" link @click="goToQuality(activeCase)">质检</el-button>
             </div>
           </template>
 
@@ -226,13 +237,13 @@ onMounted(loadData)
                     <el-descriptions-item label="处罚金额">{{ formatCurrency(activeCase.qualityRecord.penaltyAmount) }}</el-descriptions-item>
                     <el-descriptions-item label="质检事宜" :span="2">{{ activeCase.qualityRecord.matter }}</el-descriptions-item>
                     <el-descriptions-item label="违规截图" :span="2">
-                      <el-button v-if="activeCase.qualityRecord.screenshotUrl" link type="primary" @click="openQualityScreenshot(activeCase.qualityRecord.screenshotUrl)">查看截图</el-button>
+                      <el-button v-if="activeCase.qualityRecord.screenshotUrl" link type="primary" @click="openQualityScreenshot(activeCase.qualityRecord.screenshotUrl)">截图</el-button>
                       <span v-else>-</span>
                     </el-descriptions-item>
                   </el-descriptions>
                 </template>
                 <el-empty v-else description="暂未质检">
-                  <el-button v-if="canCreateQuality()" type="primary" @click="goToQuality(activeCase)">去质检</el-button>
+                  <el-button v-if="canCreateQuality()" type="primary" @click="goToQuality(activeCase)">质检</el-button>
                 </el-empty>
               </el-card>
             </div>
@@ -243,6 +254,14 @@ onMounted(loadData)
     </el-card>
 
     <JudicialComplaintCreateDialog v-model:visible="creatingDialogVisible" :loading="saving" @success="handleCreateSuccess" />
+
+    <el-dialog v-model="attachmentPreviewVisible" :title="attachmentPreviewTitle" width="800px" @closed="closeAttachmentPreview">
+      <div class="page-stack-sm">
+        <img v-if="attachmentPreviewHasImage" :src="attachmentPreviewImageUrl" :alt="attachmentPreviewTitle" class="attachment-preview" />
+        <iframe v-else-if="attachmentPreviewHasFile" :src="attachmentPreviewFileUrl" class="attachment-file-frame" />
+        <el-empty v-else description="暂无可预览截图" />
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -284,5 +303,17 @@ onMounted(loadData)
   font-size: 22px;
   font-weight: 700;
   color: var(--el-color-danger-dark-2);
+}
+
+.attachment-preview {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.attachment-file-frame {
+  width: 100%;
+  height: 70vh;
+  border: none;
 }
 </style>

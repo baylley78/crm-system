@@ -1,5 +1,5 @@
 import { Type, Transform } from 'class-transformer'
-import { IsBoolean, IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator'
+import { IsBoolean, IsDateString, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator'
 
 export class SaveMediationCaseDto {
   @IsNumber()
@@ -35,4 +35,9 @@ export class SaveMediationCaseDto {
   @IsNumber()
   @Type(() => Number)
   ownerId?: number
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['SECOND_SALES'])
+  returnTarget?: 'SECOND_SALES'
 }

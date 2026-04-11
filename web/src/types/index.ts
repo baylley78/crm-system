@@ -572,6 +572,7 @@ export interface MediationCaseItem {
   firstSalesPaymentScreenshotUrl?: string
   firstSalesChatRecordUrl?: string
   firstSalesEvidenceFileUrls: string[]
+  isReturnedToSecondSales?: boolean
 }
 
 export interface SaveMediationCasePayload {
@@ -583,6 +584,7 @@ export interface SaveMediationCasePayload {
   startDate?: string
   isCompleted?: boolean
   ownerId?: number
+  returnTarget?: 'SECOND_SALES'
 }
 
 export interface TransferToMediationPayload {
@@ -932,6 +934,7 @@ export interface SecondSalesAssignmentItem {
   thirdSalesSourceStage?: ThirdSalesSourceStage
   firstSalesRemark?: string
   firstSalesEvidence?: CustomerEvidenceSummaryItem[]
+  isReturnedToSecondSales?: boolean
 }
 
 export interface ThirdSalesReceptionItem {

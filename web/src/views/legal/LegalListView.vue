@@ -1,23 +1,22 @@
 <script setup lang="ts">
-import { Delete, Document } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { Document } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
-import { getFileName, isImageFile, toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
+import { getFileName, isImageFile, toAbsoluteFileUrl, useAttachmentPreview } from '../../composables/useAttachmentPreview'
 import { hasPermission, formatPhone } from '../../utils/permissions'
-import { fetchLegalCases, fetchLegalUsers, saveLegalCase, transferLegalCaseToThirdSales } from '../../api/legal'
-import { deleteCustomer } from '../../api/customers'
+import { fetchLegalCases, fetchLegalUsers, saveLegalCase } from '../../api/legal'
 import type { CreateRefundCasePayload, LegalCaseItem, LegalCaseStage, SalesUserOption, SaveLegalCasePayload } from '../../types'
 import RefundCreateDialog from '../refund/RefundCreateDialog.vue'
 
 const canEditLegal = () => hasPermission('legal.edit')
-const canTransferLegal = () => hasPermission('legal.transfer')
-const canDeleteCustomers = () => hasPermission('customers.delete')
 const canAssignLegal = () => hasPermission('legal.assign')
 const canReviewFiling = () => hasPermission('legal.filing.review')
 const canHandlePreTrial = () => hasPermission('legal.pretrial.handle')
 const canCloseLegal = () => hasPermission('legal.close')
 const canCreateRefund = () => hasPermission('refund.create')
 const canOperateLegal = () => canEditLegal() || canAssignLegal() || canReviewFiling() || canHandlePreTrial() || canCloseLegal()
+const canLegalCloseEntry = () => canOperateLegal()
+
 const canOnlyEditLegalBaseFields = () => canEditLegal() && !canAssignLegal() && !canReviewFiling() && !canHandlePreTrial() && !canCloseLegal()
 
 const stageOptions: Array<{ label: string; value: LegalCaseStage }> = [
@@ -39,7 +38,6 @@ const stageQuickOptions: Array<{ label: string; value: LegalCaseStage | '' }> = 
 
 const loading = ref(false)
 const saving = ref(false)
-const transferringId = ref<number | null>(null)
 const refundingId = ref<number | null>(null)
 const cases = ref<LegalCaseItem[]>([])
 const total = ref(0)
@@ -85,6 +83,16 @@ const pageSize = ref(30)
 const pageSizeOptions = [30, 50, 100]
 const selectedStage = ref<LegalCaseStage | ''>('')
 const activeCase = ref<LegalCaseItem | null>(null)
+const {
+  visible: attachmentPreviewVisible,
+  title: attachmentPreviewTitle,
+  imageUrl: attachmentPreviewImageUrl,
+  fileUrl: attachmentPreviewFileUrl,
+  hasImage: attachmentPreviewHasImage,
+  hasFile: attachmentPreviewHasFile,
+  openPreview: openAttachmentPreview,
+  closePreview: closeAttachmentPreview,
+} = useAttachmentPreview('附件预览')
 
 const legalUsers = computed(() => users.value.filter((item) => ['SUPER_ADMIN', 'LEGAL_MANAGER', 'LEGAL'].includes(item.roleCode || '')))
 
@@ -199,54 +207,6 @@ const quickCreateRefund = async (item: LegalCaseItem) => {
   }
 }
 
-const canShowTransfer = (item: LegalCaseItem) => canTransferLegal() && item.stage === 'CLOSED' && item.isCompleted && item.filingApproved && item.filingReviewed && item.transferredToPreTrial && item.currentStatus === '待转三销'
-
-const legalActionLabel = computed(() => {
-  if (canCloseLegal()) return '结案处理'
-  if (canHandlePreTrial()) return '庭前处理'
-  if (canReviewFiling()) return '立案审核'
-  if (canAssignLegal()) return '分派办理'
-  if (canEditLegal()) return '跟进记录'
-  return '查看详情'
-})
-
-const legalActionTip = computed(() => {
-  if (canCloseLegal()) return '可处理结案结果，并补充法务全流程信息'
-  if (canHandlePreTrial()) return '可办理庭前阶段，并维护前序法务信息'
-  if (canReviewFiling()) return '可审核资料、标记立案通过，并维护前序法务信息'
-  if (canAssignLegal()) return '可分派助理、立案专员、庭前负责人，并维护案件进度'
-  if (canEditLegal()) return '可登记本人负责的法务跟进信息'
-  return '可查看法务案件详情'
-})
-
-const transferToThirdSales = async (item: LegalCaseItem) => {
-  transferringId.value = item.customerId
-  try {
-    await transferLegalCaseToThirdSales(item.customerId)
-    ElMessage.success('已转入三销接待')
-    await loadData()
-  } finally {
-    transferringId.value = null
-  }
-}
-
-const handleDeleteCustomer = async (item: LegalCaseItem) => {
-  await ElMessageBox.confirm(`确认删除客户“${item.name}”吗？删除后该客户的相关业绩与跟进数据也会一并删除。`, '删除客户', {
-    type: 'warning',
-    confirmButtonText: '确认删除',
-    cancelButtonText: '取消',
-  })
-
-  saving.value = true
-  try {
-    await deleteCustomer(item.customerId)
-    ElMessage.success('客户已删除')
-    await loadData()
-  } finally {
-    saving.value = false
-  }
-}
-
 const paginatedCases = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
   return cases.value.slice(start, start + pageSize.value)
@@ -262,13 +222,13 @@ const handleStageChange = async () => {
   await loadData()
 }
 
-const openAttachment = (url?: string) => {
+const openAttachment = (url?: string, title = '附件预览') => {
   const absoluteUrl = toAbsoluteFileUrl(url)
   if (!absoluteUrl) {
     ElMessage.warning('附件地址无效')
     return
   }
-  window.open(absoluteUrl, '_blank', 'noopener')
+  openAttachmentPreview(url, title)
 }
 onMounted(() => {
   loadData()
@@ -305,18 +265,10 @@ onMounted(() => {
             <el-table-column label="操作" width="320">
               <template #default="scope">
                 <div class="action-cell compact-action-cell">
-                  <el-button link type="info" @click.stop="selectCase(scope.row)">客户详情</el-button>
-                  <el-button v-if="canAssignLegal()" link type="warning" @click.stop="openAssignmentDialog(scope.row)">分配岗位</el-button>
-                  <el-tooltip v-if="canOperateLegal()" :content="legalActionTip" placement="top">
-                    <el-button link type="primary" @click.stop="openDialog(scope.row)">{{ legalActionLabel }}</el-button>
-                  </el-tooltip>
-                  <el-button v-if="canCreateRefund()" link type="danger" :loading="refundingId === scope.row.customerId" @click.stop="quickCreateRefund(scope.row)">申请退款</el-button>
-                  <el-tooltip v-if="canShowTransfer(scope.row)" content="法务流程已完成，可转入三销接待" placement="top">
-                    <el-button link type="success" :loading="transferringId === scope.row.customerId" @click.stop="transferToThirdSales(scope.row)">移交三销</el-button>
-                  </el-tooltip>
-                  <el-tooltip v-if="canDeleteCustomers()" content="删除客户" placement="top">
-                    <el-button link type="danger" :icon="Delete" @click.stop="handleDeleteCustomer(scope.row)" />
-                  </el-tooltip>
+                  <el-button link type="info" @click.stop="selectCase(scope.row)">详情</el-button>
+                  <el-button v-if="canAssignLegal()" link type="warning" @click.stop="openAssignmentDialog(scope.row)">分配</el-button>
+                  <el-button v-if="canLegalCloseEntry()" link type="primary" @click.stop="openDialog(scope.row)">结案</el-button>
+                  <el-button v-if="canCreateRefund()" link type="danger" :loading="refundingId === scope.row.customerId" @click.stop="quickCreateRefund(scope.row)">退款</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -390,8 +342,8 @@ onMounted(() => {
                     <div class="attachment-block-title">一销材料</div>
                     <div v-if="activeCase.firstSalesEvidenceFileUrls.length" class="evidence-grid">
                       <div v-for="(item, index) in activeCase.firstSalesEvidenceFileUrls" :key="item + '-first-' + index" class="evidence-card">
-                        <img v-if="isImageFile(item)" :src="toAbsoluteFileUrl(item)" :alt="'一销材料' + (index + 1)" class="evidence-image" @click="openAttachment(item)" />
-                        <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(item)">
+                        <img v-if="isImageFile(item)" :src="toAbsoluteFileUrl(item)" :alt="'一销材料' + (index + 1)" class="evidence-image" @click="openAttachment(item, `一销材料${index + 1}`)" />
+                        <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(item, `一销材料${index + 1}`)">
                           <el-icon><Document /></el-icon>
                           <span>{{ getFileName(item) || '一销材料' + (index + 1) }}</span>
                         </el-button>
@@ -411,7 +363,7 @@ onMounted(() => {
                     <div class="attachment-block-title">付款截图</div>
                     <div v-if="activeCase.secondSalesPaymentScreenshotUrl" class="evidence-grid">
                       <div class="evidence-card">
-                        <img :src="toAbsoluteFileUrl(activeCase.secondSalesPaymentScreenshotUrl)" alt="二销付款截图" class="evidence-image" @click="openAttachment(activeCase.secondSalesPaymentScreenshotUrl)" />
+                        <img :src="toAbsoluteFileUrl(activeCase.secondSalesPaymentScreenshotUrl)" alt="二销付款截图" class="evidence-image" @click="openAttachment(activeCase.secondSalesPaymentScreenshotUrl, '二销付款截图')" />
                       </div>
                     </div>
                     <el-empty v-else description="暂无二销付款截图" />
@@ -420,8 +372,8 @@ onMounted(() => {
                     <div class="attachment-block-title">聊天记录</div>
                     <div v-if="activeCase.secondSalesChatRecordUrl" class="evidence-grid">
                       <div class="evidence-card">
-                        <img v-if="isImageFile(activeCase.secondSalesChatRecordUrl)" :src="toAbsoluteFileUrl(activeCase.secondSalesChatRecordUrl)" alt="二销聊天记录" class="evidence-image" @click="openAttachment(activeCase.secondSalesChatRecordUrl)" />
-                        <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(activeCase.secondSalesChatRecordUrl)">
+                        <img v-if="isImageFile(activeCase.secondSalesChatRecordUrl)" :src="toAbsoluteFileUrl(activeCase.secondSalesChatRecordUrl)" alt="二销聊天记录" class="evidence-image" @click="openAttachment(activeCase.secondSalesChatRecordUrl, '二销聊天记录')" />
+                        <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(activeCase.secondSalesChatRecordUrl, '二销聊天记录')">
                           <el-icon><Document /></el-icon>
                           <span>{{ getFileName(activeCase.secondSalesChatRecordUrl) || '二销聊天记录' }}</span>
                         </el-button>
@@ -433,8 +385,8 @@ onMounted(() => {
                     <div class="attachment-block-title">证据材料</div>
                     <div v-if="activeCase.secondSalesEvidenceFileUrls.length" class="evidence-grid">
                       <div v-for="(item, index) in activeCase.secondSalesEvidenceFileUrls" :key="item + '-second-' + index" class="evidence-card">
-                        <img v-if="isImageFile(item)" :src="toAbsoluteFileUrl(item)" :alt="'二销材料' + (index + 1)" class="evidence-image" @click="openAttachment(item)" />
-                        <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(item)">
+                        <img v-if="isImageFile(item)" :src="toAbsoluteFileUrl(item)" :alt="'二销材料' + (index + 1)" class="evidence-image" @click="openAttachment(item, `二销材料${index + 1}`)" />
+                        <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(item, `二销材料${index + 1}`)">
                           <el-icon><Document /></el-icon>
                           <span>{{ getFileName(item) || '二销材料' + (index + 1) }}</span>
                         </el-button>
@@ -454,7 +406,7 @@ onMounted(() => {
                     <div class="attachment-block-title">付款截图</div>
                     <div v-if="activeCase.thirdSalesPaymentScreenshotUrl" class="evidence-grid">
                       <div class="evidence-card">
-                        <img :src="toAbsoluteFileUrl(activeCase.thirdSalesPaymentScreenshotUrl)" alt="三销付款截图" class="evidence-image" @click="openAttachment(activeCase.thirdSalesPaymentScreenshotUrl)" />
+                        <img :src="toAbsoluteFileUrl(activeCase.thirdSalesPaymentScreenshotUrl)" alt="三销付款截图" class="evidence-image" @click="openAttachment(activeCase.thirdSalesPaymentScreenshotUrl, '三销付款截图')" />
                       </div>
                     </div>
                     <el-empty v-else description="暂无三销付款截图" />
@@ -463,8 +415,8 @@ onMounted(() => {
                     <div class="attachment-block-title">聊天记录</div>
                     <div v-if="activeCase.thirdSalesChatRecordUrl" class="evidence-grid">
                       <div class="evidence-card">
-                        <img v-if="isImageFile(activeCase.thirdSalesChatRecordUrl)" :src="toAbsoluteFileUrl(activeCase.thirdSalesChatRecordUrl)" alt="三销聊天记录" class="evidence-image" @click="openAttachment(activeCase.thirdSalesChatRecordUrl)" />
-                        <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(activeCase.thirdSalesChatRecordUrl)">
+                        <img v-if="isImageFile(activeCase.thirdSalesChatRecordUrl)" :src="toAbsoluteFileUrl(activeCase.thirdSalesChatRecordUrl)" alt="三销聊天记录" class="evidence-image" @click="openAttachment(activeCase.thirdSalesChatRecordUrl, '三销聊天记录')" />
+                        <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(activeCase.thirdSalesChatRecordUrl, '三销聊天记录')">
                           <el-icon><Document /></el-icon>
                           <span>{{ getFileName(activeCase.thirdSalesChatRecordUrl) || '三销聊天记录' }}</span>
                         </el-button>
@@ -476,8 +428,8 @@ onMounted(() => {
                     <div class="attachment-block-title">证据材料</div>
                     <div v-if="activeCase.thirdSalesEvidenceFileUrls.length" class="evidence-grid">
                       <div v-for="(item, index) in activeCase.thirdSalesEvidenceFileUrls" :key="item + '-third-' + index" class="evidence-card">
-                        <img v-if="isImageFile(item)" :src="toAbsoluteFileUrl(item)" :alt="'三销材料' + (index + 1)" class="evidence-image" @click="openAttachment(item)" />
-                        <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(item)">
+                        <img v-if="isImageFile(item)" :src="toAbsoluteFileUrl(item)" :alt="'三销材料' + (index + 1)" class="evidence-image" @click="openAttachment(item, `三销材料${index + 1}`)" />
+                        <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(item, `三销材料${index + 1}`)">
                           <el-icon><Document /></el-icon>
                           <span>{{ getFileName(item) || '三销材料' + (index + 1) }}</span>
                         </el-button>
@@ -491,8 +443,8 @@ onMounted(() => {
                   <div class="evidence-section-title">上游证据总览</div>
                   <div v-if="activeCase.upstreamEvidenceFileUrls.length" class="evidence-grid">
                     <div v-for="(item, index) in activeCase.upstreamEvidenceFileUrls" :key="item + '-' + index" class="evidence-card">
-                      <img v-if="isImageFile(item)" :src="toAbsoluteFileUrl(item)" :alt="'上游证据' + (index + 1)" class="evidence-image" @click="openAttachment(item)" />
-                      <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(item)">
+                      <img v-if="isImageFile(item)" :src="toAbsoluteFileUrl(item)" :alt="'上游证据' + (index + 1)" class="evidence-image" @click="openAttachment(item, `上游证据${index + 1}`)" />
+                      <el-button v-else text type="primary" class="evidence-link" @click="openAttachment(item, `上游证据${index + 1}`)">
                         <el-icon><Document /></el-icon>
                         <span>{{ getFileName(item) || '上游证据' + (index + 1) }}</span>
                       </el-button>
@@ -507,6 +459,14 @@ onMounted(() => {
       </template>
       <el-empty v-else description="请选择法务案件" />
     </el-drawer>
+
+    <el-dialog v-model="attachmentPreviewVisible" :title="attachmentPreviewTitle" width="800px" @closed="closeAttachmentPreview">
+      <div class="page-stack-sm">
+        <img v-if="attachmentPreviewHasImage" :src="attachmentPreviewImageUrl" :alt="attachmentPreviewTitle" class="attachment-preview" />
+        <iframe v-else-if="attachmentPreviewHasFile" :src="attachmentPreviewFileUrl" class="attachment-file-frame" />
+        <el-empty v-else description="暂无可预览附件" />
+      </div>
+    </el-dialog>
 
     <el-dialog v-model="assignmentDialogVisible" title="分配法务岗位" width="520px">
       <el-form label-width="110px">
@@ -713,5 +673,17 @@ onMounted(() => {
 
 .legal-detail-drawer-body {
   padding-right: 8px;
+}
+
+.attachment-preview {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.attachment-file-frame {
+  width: 100%;
+  height: 70vh;
+  border: none;
 }
 </style>

@@ -18,13 +18,16 @@ const buildMediationFormData = (payload: SaveMediationCasePayload) => {
   if (payload.ownerId) {
     formData.append('ownerId', String(payload.ownerId))
   }
+  if (payload.returnTarget) {
+    formData.append('returnTarget', payload.returnTarget)
+  }
   for (const file of payload.evidenceFiles || []) {
     formData.append('evidenceFiles', file)
   }
   return formData
 }
 
-export const fetchMediationCases = async (params: { page?: number; pageSize?: number } = {}) => {
+export const fetchMediationCases = async (params: { page?: number; pageSize?: number; returnedOnly?: boolean } = {}) => {
   const { data } = await request.get<PaginatedResponse<MediationCaseItem>>('/mediation/cases', { params })
   return data
 }

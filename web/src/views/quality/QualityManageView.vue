@@ -280,7 +280,7 @@ onMounted(async () => {
                     <div class="paste-upload-box" tabindex="0" @paste="handleScreenshotPaste">复制图片后，在这里按 Ctrl+V 粘贴违规截图</div>
                     <img v-if="screenshotPreviewUrl" :src="screenshotPreviewUrl" alt="违规截图预览" class="screenshot-preview" />
                     <el-upload :auto-upload="false" :show-file-list="true" :limit="1" :file-list="screenshotFileList" :on-change="handleScreenshotChange" :on-remove="handleScreenshotRemove">
-                      <el-button>上传违规截图</el-button>
+                      <el-button>上传</el-button>
                     </el-upload>
                   </div>
                 </el-form-item>
@@ -290,7 +290,7 @@ onMounted(async () => {
               </el-form>
               <div class="actions-row">
                 <el-button @click="resetForm">重置</el-button>
-                <el-button type="primary" :loading="saving" @click="submit">保存质检记录</el-button>
+                <el-button type="primary" :loading="saving" @click="submit">保存</el-button>
               </div>
             </el-card>
           </el-collapse-item>
@@ -318,7 +318,7 @@ onMounted(async () => {
             </el-table-column>
             <el-table-column label="违规截图" min-width="140">
               <template #default="scope">
-                <el-button v-if="scope.row.screenshotUrl" link type="primary" @click="openPreview(scope.row.screenshotUrl)">查看截图</el-button>
+                <el-button v-if="scope.row.screenshotUrl" link type="primary" @click="openPreview(scope.row.screenshotUrl)">截图</el-button>
                 <span v-else>-</span>
               </template>
             </el-table-column>
