@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Delete, Document } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { getFileName, isImageFile, toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
 import { hasPermission, formatPhone } from '../../utils/permissions'
 import { fetchLegalCases, fetchLegalUsers, saveLegalCase, transferLegalCaseToThirdSales } from '../../api/legal'
@@ -237,7 +237,9 @@ const openAttachment = (url?: string) => {
   }
   window.open(absoluteUrl, '_blank', 'noopener')
 }
-
+onMounted(() => {
+  loadData()
+})
 
 </script>
 
@@ -270,6 +272,7 @@ const openAttachment = (url?: string) => {
             <el-table-column label="操作" width="320">
               <template #default="scope">
                 <div class="action-cell compact-action-cell">
+                  <el-button v-if="canAssignLegal()" link type="warning" @click="openDialog(scope.row)">分配岗位</el-button>
                   <el-tooltip v-if="canOperateLegal()" :content="legalActionTip" placement="top">
                     <el-button link type="primary" @click="openDialog(scope.row)">{{ legalActionLabel }}</el-button>
                   </el-tooltip>
