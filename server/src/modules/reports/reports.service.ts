@@ -181,13 +181,10 @@ export class ReportsService {
       return { options: [] }
     }
 
-    const departments = await this.prisma.department.findMany({
-      where: { id: { in: allowedDepartmentIds } },
-      select: { id: true, name: true },
-      orderBy: [{ sort: 'asc' }, { id: 'asc' }],
-    })
+    const options = this.flattenDepartmentOptions(departmentTree)
+      .filter((item) => allowedDepartmentIds.includes(item.id))
 
-    return { options: departments.map((item) => ({ id: item.id, name: item.name })) }
+    return { options }
   }
 
   async getFirstSalesPersonal(currentUser: AuthenticatedUser, query: ReportQuery): Promise<{ rows: FirstSalesPersonalRow[] }> {
@@ -556,6 +553,16 @@ export class ReportsService {
 
   private toDateKey(date: Date) {
     return date.toISOString().slice(0, 10)
+  }
+
+  private flattenDepartmentOptions(
+    items: Array<{ id: number; name: string; children?: any[] }>,
+    prefix = '',
+  ): ReportDepartmentOption[] {
+    return items.flatMap((item) => {
+      const label = prefix ? `${prefix} / ${item.name}` : item.name
+      return [{ id: item.id, name: label }, ...this.flattenDepartmentOptions(item.children || [], label)]
+    })
   }
 
   private collectStageDepartmentIds(items: Array<{ id: number; name: string; children?: any[] }>, rootNames: string[]) {
