@@ -7,8 +7,9 @@ import { authStorage } from '../../auth'
 import { fetchDepartmentTree } from '../../api/departments'
 import { hasPermission, formatPhone } from '../../utils/permissions'
 import { toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
+import { flattenDepartmentSubtrees } from '../../utils/department-options'
 import { batchReviewFirstSalesOrders, deleteFirstSalesOrder, fetchFirstSalesOrders } from '../../api/first-sales'
-import type { BatchFinanceReviewPayload, CustomerItem, DepartmentTreeItem, FirstSalesListItem } from '../../types'
+import type { BatchFinanceReviewPayload, CustomerItem, FirstSalesListItem } from '../../types'
 import CustomerTailPaymentDrawer from '../customers/CustomerTailPaymentDrawer.vue'
 import RefundCreateDialog from '../refund/RefundCreateDialog.vue'
 import FirstSalesCreateDrawer from './FirstSalesCreateDrawer.vue'
@@ -49,12 +50,6 @@ const filters = ref({
   financeReviewStatus: '',
   timeRange: [] as string[],
 })
-
-const flattenDepartments = (items: DepartmentTreeItem[], prefix = ''): Array<{ id: number; name: string }> =>
-  items.flatMap((item) => {
-    const label = prefix ? `${prefix} / ${item.name}` : item.name
-    return [{ id: item.id, name: label }, ...flattenDepartments(item.children || [], label)]
-  })
 
 const orderTypeOptions = ['定金', '尾款', '全款']
 const paymentStatusOptions = ['已付清', '部分付款']
@@ -128,7 +123,7 @@ const loadDepartments = async () => {
     departmentOptions.value = []
     return
   }
-  departmentOptions.value = flattenDepartments(await fetchDepartmentTree())
+  departmentOptions.value = flattenDepartmentSubtrees(await fetchDepartmentTree(), ['一销团队'])
 }
 
 const resetFilters = () => {

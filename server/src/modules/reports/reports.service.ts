@@ -7,6 +7,12 @@ import type { AuthenticatedUser } from '../auth/auth.service'
 
 type ReportStage = 'first-sales' | 'second-sales' | 'third-sales'
 
+const REPORT_STAGE_TEAM_ROOTS: Record<ReportStage, string[]> = {
+  'first-sales': ['一销团队'],
+  'second-sales': ['二销团队'],
+  'third-sales': ['二销团队', '三销团队'],
+}
+
 interface ReportQuery {
   startDate?: string
   endDate?: string
@@ -165,16 +171,23 @@ export class ReportsService {
 
   async getDepartmentOptions(currentUser: AuthenticatedUser, stage: ReportStage): Promise<{ options: ReportDepartmentOption[] }> {
     const visibleDepartmentIds = await this.buildVisibleDepartmentIds(currentUser)
+    const departmentTree = await this.departmentsService.findTree(currentUser)
+    const stageDepartmentIds = this.collectStageDepartmentIds(departmentTree, REPORT_STAGE_TEAM_ROOTS[stage])
+    const allowedDepartmentIds = visibleDepartmentIds
+      ? stageDepartmentIds.filter((id) => visibleDepartmentIds.includes(id))
+      : stageDepartmentIds
+
+    if (!allowedDepartmentIds.length) {
+      return { options: [] }
+    }
+
     const departments = await this.prisma.department.findMany({
-      where: {
-        ...(visibleDepartmentIds ? { id: { in: visibleDepartmentIds } } : {}),
-      },
+      where: { id: { in: allowedDepartmentIds } },
       select: { id: true, name: true },
       orderBy: [{ sort: 'asc' }, { id: 'asc' }],
     })
 
-    const options = departments.filter((item) => this.matchesStageDepartment(item.name, stage)).map((item) => ({ id: item.id, name: item.name }))
-    return { options }
+    return { options: departments.map((item) => ({ id: item.id, name: item.name })) }
   }
 
   async getFirstSalesPersonal(currentUser: AuthenticatedUser, query: ReportQuery): Promise<{ rows: FirstSalesPersonalRow[] }> {
@@ -545,16 +558,40 @@ export class ReportsService {
     return date.toISOString().slice(0, 10)
   }
 
-  private matchesStageDepartment(name: string, stage: ReportStage) {
-    const normalized = name.replace(/\s+/g, '').toUpperCase()
+  private collectStageDepartmentIds(items: Array<{ id: number; name: string; children?: any[] }>, rootNames: string[]) {
+    const seen = new Set<number>()
+    const result: number[] = []
 
-    if (stage === 'first-sales') {
-      return ['一销', '电销', 'FIRST', 'FIRSTSALES'].some((keyword) => normalized.includes(keyword))
+    for (const rootName of rootNames) {
+      const node = this.findDepartmentNodeByName(items, rootName)
+      this.collectDepartmentIds(node ? [node] : [], seen, result)
     }
-    if (stage === 'second-sales') {
-      return ['二销', 'SECOND', 'SECONDSALES'].some((keyword) => normalized.includes(keyword))
+
+    return result
+  }
+
+  private findDepartmentNodeByName(items: Array<{ id: number; name: string; children?: any[] }>, name: string): { id: number; name: string; children?: any[] } | null {
+    const normalizedTarget = name.replace(/\s+/g, '')
+    for (const item of items) {
+      if (item.name.replace(/\s+/g, '') === normalizedTarget) {
+        return item
+      }
+      const matchedChild = this.findDepartmentNodeByName(item.children || [], name)
+      if (matchedChild) {
+        return matchedChild
+      }
     }
-    return ['三销', '开庭', 'THIRD', 'THIRDSALES'].some((keyword) => normalized.includes(keyword))
+    return null
+  }
+
+  private collectDepartmentIds(items: Array<{ id: number; children?: any[] }>, seen: Set<number>, result: number[]) {
+    for (const item of items) {
+      if (!seen.has(item.id)) {
+        seen.add(item.id)
+        result.push(item.id)
+      }
+      this.collectDepartmentIds(item.children || [], seen, result)
+    }
   }
 
   private async buildVisibleDepartmentIds(currentUser: AuthenticatedUser): Promise<number[] | null> {

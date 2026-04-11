@@ -7,8 +7,9 @@ import { authStorage } from '../../auth'
 import { fetchDepartmentTree } from '../../api/departments'
 import { toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
 import { hasPermission, formatPhone } from '../../utils/permissions'
+import { flattenDepartmentSubtrees } from '../../utils/department-options'
 import { batchReviewThirdSalesOrders, deleteThirdSalesOrder, fetchThirdSalesOrders } from '../../api/third-sales'
-import type { BatchFinanceReviewPayload, DepartmentTreeItem, ThirdSalesOrderListItem, ThirdSalesOrderPayload } from '../../types'
+import type { BatchFinanceReviewPayload, ThirdSalesOrderListItem, ThirdSalesOrderPayload } from '../../types'
 import RefundCreateDialog from '../refund/RefundCreateDialog.vue'
 import ThirdSalesOrderDrawer from './ThirdSalesOrderDrawer.vue'
 
@@ -58,12 +59,6 @@ const financeReviewPartitionOptions = [
 const currentPage = ref(1)
 const pageSize = ref(30)
 const pageSizeOptions = [30, 50, 100]
-
-const flattenDepartments = (items: DepartmentTreeItem[], prefix = ''): Array<{ id: number; name: string }> =>
-  items.flatMap((item) => {
-    const label = prefix ? `${prefix} / ${item.name}` : item.name
-    return [{ id: item.id, name: label }, ...flattenDepartments(item.children || [], label)]
-  })
 
 const formatDateTime = (value?: string) => value?.replace('T', ' ').slice(0, 19) || '-'
 const formatCurrency = (value?: number) => `¥${Number(value ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -141,7 +136,7 @@ const loadDepartments = async () => {
     departmentOptions.value = []
     return
   }
-  departmentOptions.value = flattenDepartments(await fetchDepartmentTree())
+  departmentOptions.value = flattenDepartmentSubtrees(await fetchDepartmentTree(), ['二销团队', '三销团队'])
 }
 
 const applyFinancePartition = (status: string) => {

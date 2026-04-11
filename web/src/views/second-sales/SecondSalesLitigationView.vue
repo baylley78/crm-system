@@ -7,9 +7,10 @@ import { authStorage } from '../../auth'
 import { fetchDepartmentTree } from '../../api/departments'
 import { toAbsoluteFileUrl } from '../../composables/useAttachmentPreview'
 import { hasPermission, formatPhone } from '../../utils/permissions'
+import { flattenDepartmentSubtrees } from '../../utils/department-options'
 import { batchReviewSecondSalesOrders, deleteSecondSalesOrder, fetchSecondSalesOrders } from '../../api/second-sales'
 import SecondSalesOrderDrawer from './SecondSalesOrderDrawer.vue'
-import type { BatchFinanceReviewPayload, DepartmentTreeItem, SecondSalesOrderListItem, SecondSalesOrderPayload } from '../../types'
+import type { BatchFinanceReviewPayload, SecondSalesOrderListItem, SecondSalesOrderPayload } from '../../types'
 
 const filtersCollapsed = ref(true)
 const departmentOptions = ref<Array<{ id: number; name: string }>>([])
@@ -48,19 +49,13 @@ const currentPage = ref(1)
 const pageSize = ref(30)
 const pageSizeOptions = [30, 50, 100]
 
-const flattenDepartments = (items: DepartmentTreeItem[], prefix = ''): Array<{ id: number; name: string }> =>
-  items.flatMap((item) => {
-    const label = prefix ? `${prefix} / ${item.name}` : item.name
-    return [{ id: item.id, name: label }, ...flattenDepartments(item.children || [], label)]
-  })
-
-const canBatchReviewSecondSales = () => hasPermission('secondSales.review.batch')
+const formatDateTime = (value?: string) => value?.replace('T', ' ').slice(0, 19) || '-'
 const canEditSecondSales = () => hasPermission('secondSales.edit')
 const canTailSecondSales = () => hasPermission('secondSales.create') || hasPermission('secondSales.edit')
 const canExportSecondSales = () => hasPermission('secondSales.export')
 const canDeleteSecondSales = () => hasPermission('secondSales.delete')
+const canBatchReviewSecondSales = () => hasPermission('secondSales.review.batch')
 
-const formatDateTime = (value?: string) => value?.replace('T', ' ').slice(0, 19) || '-'
 const imageExtensionPattern = /\.(png|jpe?g|gif|bmp|webp|svg)$/i
 const isImageFile = (value?: string) => Boolean(value && imageExtensionPattern.test(value))
 const getFileName = (value?: string) => value?.split('/').pop() || '附件文件'
@@ -129,7 +124,7 @@ const loadDepartments = async () => {
     departmentOptions.value = []
     return
   }
-  departmentOptions.value = flattenDepartments(await fetchDepartmentTree())
+  departmentOptions.value = flattenDepartmentSubtrees(await fetchDepartmentTree(), ['二销团队'])
 }
 
 const applyFinancePartition = (status: string) => {
