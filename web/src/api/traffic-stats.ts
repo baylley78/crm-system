@@ -26,6 +26,11 @@ export const deleteTrafficStat = async (id: number) => {
   return data
 }
 
+export const batchDeleteTrafficStats = async (ids: number[]) => {
+  const { data } = await request.post<{ success: boolean; count: number }>('/traffic-stats/batch-delete', { ids })
+  return data
+}
+
 export const fetchTrafficStats = async (params: ReportQueryParams = {}) => {
   const { data } = await request.get<ReportRowsResponse<TrafficStatItem>>('/traffic-stats', { params })
   return data

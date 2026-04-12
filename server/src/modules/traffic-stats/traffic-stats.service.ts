@@ -284,8 +284,18 @@ export class TrafficStatsService {
   }
 
   async deleteTrafficStat(currentUser: AuthenticatedUser, id: number) {
-    const item = await this.prisma.trafficStat.findUnique({
-      where: { id },
+    const result = await this.deleteTrafficStats(currentUser, [id])
+    return { success: result.success }
+  }
+
+  async deleteTrafficStats(currentUser: AuthenticatedUser, ids: number[]) {
+    const targetIds = Array.from(new Set(ids.filter((id) => Number.isInteger(id) && id > 0)))
+    if (!targetIds.length) {
+      throw new ForbiddenException('请选择要删除的来客统计')
+    }
+
+    const items = await this.prisma.trafficStat.findMany({
+      where: { id: { in: targetIds } },
       select: {
         id: true,
         userId: true,
@@ -293,11 +303,29 @@ export class TrafficStatsService {
       },
     })
 
-    if (!item) {
-      throw new ForbiddenException('来客统计不存在')
+    if (items.length !== targetIds.length) {
+      throw new ForbiddenException('部分来客统计不存在或已删除')
     }
 
     const where = await this.buildVisibilityWhere(currentUser)
+    for (const item of items) {
+      this.ensureTrafficStatDeletable(where, item)
+    }
+
+    const result = await this.prisma.trafficStat.deleteMany({
+      where: { id: { in: targetIds } },
+    })
+
+    return {
+      success: true,
+      count: result.count,
+    }
+  }
+
+  private ensureTrafficStatDeletable(
+    where: Prisma.TrafficStatWhereInput,
+    item: { userId: number; departmentId: number | null },
+  ) {
     if (where.userId !== undefined && where.userId !== item.userId) {
       throw new ForbiddenException('无权删除该来客统计')
     }
@@ -312,12 +340,6 @@ export class TrafficStatsService {
     ) {
       throw new ForbiddenException('无权删除该来客统计')
     }
-
-    await this.prisma.trafficStat.delete({
-      where: { id },
-    })
-
-    return { success: true }
   }
 
   private mapRow(item: TrafficStatManualRow) {

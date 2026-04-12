@@ -4,6 +4,7 @@ import { CurrentUserGuard } from '../../common/auth/current-user.guard'
 import { PermissionGuard } from '../../common/auth/permission.guard'
 import { RequirePermission } from '../../common/auth/require-permission.decorator'
 import type { AuthenticatedUser } from '../auth/auth.service'
+import { BatchDeleteTrafficStatsDto } from './dto/batch-delete-traffic-stats.dto'
 import { SaveTrafficStatDto } from './dto/save-traffic-stat.dto'
 import { TrafficStatsQueryDto } from './dto/traffic-stats-query.dto'
 import { TrafficStatsService } from './traffic-stats.service'
@@ -54,6 +55,15 @@ export class TrafficStatsController {
   async getDepartments(@CurrentUser() currentUser: AuthenticatedUser) {
     const options = await this.trafficStatsService.getDepartmentOptions(currentUser)
     return { options }
+  }
+
+  @Post('batch-delete')
+  @RequirePermission('trafficStats.delete')
+  deleteTrafficStats(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Body() dto: BatchDeleteTrafficStatsDto,
+  ) {
+    return this.trafficStatsService.deleteTrafficStats(currentUser, dto.ids)
   }
 
   @Delete(':id')

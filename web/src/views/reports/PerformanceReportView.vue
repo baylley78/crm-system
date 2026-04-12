@@ -146,7 +146,13 @@ const columns = computed(() => {
 const formatCurrency = (value: unknown) => `¥${Number(value || 0).toLocaleString('zh-CN')}`
 const formatPercent = (value: unknown) => `${(Number(value || 0) * 100).toFixed(2)}%`
 
-const applyQuickRange = (range: 'day' | 'week' | 'month') => {
+const syncDateRangeFilters = (start?: Date, end?: Date) => {
+  dateRange.value = start && end ? [start, end] : []
+  filters.startDate = start ? start.toISOString() : ''
+  filters.endDate = end ? end.toISOString() : ''
+}
+
+const applyQuickRange = async (range: 'day' | 'week' | 'month') => {
   activeQuickRange.value = range
   const end = new Date()
   const start = new Date(end)
@@ -165,8 +171,8 @@ const applyQuickRange = (range: 'day' | 'week' | 'month') => {
     start.setHours(0, 0, 0, 0)
     end.setHours(23, 59, 59, 999)
   }
-  dateRange.value = [start, end]
-  loadData()
+  syncDateRangeFilters(start, end)
+  await loadData()
 }
 
 const loadDepartmentOptions = async () => {
@@ -192,6 +198,7 @@ const loadData = async () => {
 watch(dateRange, (value) => {
   filters.startDate = value[0] ? value[0].toISOString() : ''
   filters.endDate = value[1] ? value[1].toISOString() : ''
+  activeQuickRange.value = ''
 })
 
 onMounted(async () => {
@@ -200,7 +207,7 @@ onMounted(async () => {
   }
 
   await loadDepartmentOptions()
-  applyQuickRange('day')
+  await applyQuickRange(props.scope === 'personal' ? 'day' : 'month')
 })
 </script>
 

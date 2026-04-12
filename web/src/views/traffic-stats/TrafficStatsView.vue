@@ -3,7 +3,7 @@ import { Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { hasPermission } from '../../utils/permissions'
-import { deleteTrafficStat, fetchMyTrafficStat, fetchTrafficStatDepartments, fetchTrafficStats, saveMyTrafficStat } from '../../api/traffic-stats'
+import { batchDeleteTrafficStats, deleteTrafficStat, fetchMyTrafficStat, fetchTrafficStatDepartments, fetchTrafficStats, saveMyTrafficStat } from '../../api/traffic-stats'
 import type { ReportDepartmentOption, ReportQueryParams, SaveTrafficStatPayload, TrafficStatDailyForm, TrafficStatItem } from '../../types'
 
 const canSubmit = computed(() => hasPermission('trafficStats.submit'))
@@ -14,6 +14,7 @@ const loading = ref(false)
 const saving = ref(false)
 const drawerVisible = ref(false)
 const records = ref<TrafficStatItem[]>([])
+const selectedRecordIds = ref<number[]>([])
 const departmentOptions = ref<ReportDepartmentOption[]>([])
 const dateRange = ref<[Date, Date] | []>([])
 const filters = reactive<ReportQueryParams>({
@@ -157,6 +158,34 @@ const handleDelete = async (item: TrafficStatItem) => {
   try {
     await deleteTrafficStat(item.id)
     ElMessage.success('来客统计已删除')
+    selectedRecordIds.value = []
+    await loadStats()
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleSelectionChange = (rows: TrafficStatItem[]) => {
+  selectedRecordIds.value = rows.map((item) => item.id)
+}
+
+const handleBatchDelete = async () => {
+  if (!selectedRecordIds.value.length) {
+    ElMessage.warning('请先选择来客统计')
+    return
+  }
+
+  await ElMessageBox.confirm(`确认批量删除已选 ${selectedRecordIds.value.length} 条来客统计吗？删除后可重新填报。`, '批量删除来客统计', {
+    type: 'warning',
+    confirmButtonText: '确认删除',
+    cancelButtonText: '取消',
+  })
+
+  loading.value = true
+  try {
+    await batchDeleteTrafficStats(selectedRecordIds.value)
+    ElMessage.success('批量删除来客统计成功')
+    selectedRecordIds.value = []
     await loadStats()
   } finally {
     loading.value = false
@@ -200,7 +229,10 @@ onMounted(async () => {
         <template #header>
           <div class="card-header-row">
             <span>明细列表</span>
-            <el-button v-if="canSubmit" type="primary" @click="openDrawer">添加</el-button>
+            <el-space>
+              <el-button v-if="canDelete" type="danger" :loading="loading" @click="handleBatchDelete">批量删除</el-button>
+              <el-button v-if="canSubmit" type="primary" @click="openDrawer">添加</el-button>
+            </el-space>
           </div>
         </template>
         <div class="page-stack-sm">
@@ -224,7 +256,8 @@ onMounted(async () => {
             </el-form-item>
           </el-form>
 
-          <el-table :data="records">
+          <el-table :data="records" @selection-change="handleSelectionChange">
+            <el-table-column v-if="canDelete" type="selection" width="55" />
             <el-table-column prop="reportDate" label="日期" min-width="120" />
             <el-table-column prop="salesName" label="填报销售" min-width="140" />
             <el-table-column label="一销团队/部门" min-width="220">
