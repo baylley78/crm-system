@@ -156,7 +156,7 @@ export class SecondSalesService implements OnModuleInit {
     const existingCustomer = await this.prisma.customer.findFirst({
       where: {
         phone: dto.phone,
-        ...(await this.customersService.buildCustomerVisibilityWhere(currentUser)),
+        ...(await this.customersService.buildPerformanceFormCustomerVisibilityWhere(currentUser)),
       },
     })
     if (!existingCustomer) {
