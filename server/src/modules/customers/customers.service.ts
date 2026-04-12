@@ -363,6 +363,10 @@ export class CustomersService {
   }
 
   async buildPerformanceFormCustomerVisibilityWhere(currentUser: AuthenticatedUser): Promise<Prisma.CustomerWhereInput> {
+    if (currentUser.roleCode === 'SUPER_ADMIN') {
+      return {}
+    }
+
     const baseVisibilityWhere = await this.buildCustomerVisibilityWhere(currentUser)
 
     if (currentUser.permissions?.includes('firstSales.create') || currentUser.permissions?.includes('firstSales.edit')) {
