@@ -11,6 +11,7 @@ import RefundCreateDialog from '../refund/RefundCreateDialog.vue'
 
 const canEditMediation = () => hasPermission('mediation.edit')
 const canAssignMediation = () => hasPermission('mediation.edit') || hasPermission('mediation.complete')
+const canReturnMediation = () => hasPermission('mediation.return')
 const canEditMediationTime = () => hasPermission('mediation.time.edit')
 const canCompleteMediation = () => hasPermission('mediation.complete')
 const canCreateRefund = () => hasPermission('refund.create')
@@ -179,7 +180,7 @@ const canReturnToSecondSales = (item: MediationCaseItem) => {
   if (item.isReturnedToSecondSales || !item.secondSalesUserId) {
     return false
   }
-  return canEditMediation() && (canProcessingStatus(item.currentStatus) || canCompletedStatus(item.currentStatus))
+  return canReturnMediation() && (canProcessingStatus(item.currentStatus) || canCompletedStatus(item.currentStatus))
 }
 
 const rowClassName = ({ row }: { row: MediationCaseItem }) => {

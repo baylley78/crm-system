@@ -7,10 +7,11 @@ import { FilesService } from '../files/files.service'
 import { SaveMediationCaseDto } from './dto/save-mediation-case.dto'
 
 const MEDIATION_ROLE_CODES = ['SUPER_ADMIN', 'AFTER_SALES_MANAGER', 'AFTER_SALES', 'MEDIATION_SPECIALIST', 'LEGAL_MANAGER', 'LEGAL', 'SECOND_SALES_MANAGER', 'SECOND_SALES_SUPERVISOR', 'SECOND_SALES']
-const RETURN_TO_SECOND_SALES_ROLE_CODES = ['MEDIATION_SPECIALIST', 'SECOND_SALES_SUPERVISOR']
 const DEFAULT_PAGE = 1
 const DEFAULT_PAGE_SIZE = 30
 const MEDIATION_TIME_EDIT_PERMISSION = 'mediation.time.edit'
+const MEDIATION_RETURN_PERMISSION = 'mediation.return'
+const SUPER_ADMIN_ROLE_CODE = 'SUPER_ADMIN'
 
 @Injectable()
 export class MediationService {
@@ -235,7 +236,8 @@ export class MediationService {
     },
   ) {
     const operator = await this.prisma.user.findUnique({ where: { id: currentUser.id }, include: { role: true } })
-    if (!operator || !RETURN_TO_SECOND_SALES_ROLE_CODES.includes(operator.role.code)) {
+    const hasReturnPermission = currentUser.roleCode === SUPER_ADMIN_ROLE_CODE || currentUser.permissions.includes(MEDIATION_RETURN_PERMISSION)
+    if (!operator || !hasReturnPermission) {
       throw new BadRequestException('暂无转回权限')
     }
 

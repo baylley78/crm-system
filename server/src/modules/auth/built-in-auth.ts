@@ -85,6 +85,7 @@ export const BUILT_IN_PERMISSION_DEFINITIONS: BuiltInPermissionDefinition[] = [
   { code: 'legal.transfer', name: '法务转交三销' },
   { code: 'mediation.view', name: '查看调解系统' },
   { code: 'mediation.edit', name: '跟进/分配调解案件' },
+  { code: 'mediation.return', name: '转回调解案件', description: '允许将调解中的客户转回二销继续接待' },
   { code: 'mediation.complete', name: '完结调解案件' },
   { code: 'mediation.time.edit', name: '修改调解开始时间', description: '允许修改调解案件开始时间' },
   { code: 'oa.approvals.view', name: '查看OA审批' },
@@ -189,7 +190,7 @@ const thirdSalesPermissionCodes = [
 ]
 const legalPermissionCodes = ['legal.view', 'legal.edit']
 const legalManagerExtraPermissionCodes = ['legal.assign', 'legal.filing.review', 'legal.pretrial.handle', 'legal.close', 'legal.transfer']
-const mediationPermissionCodes = ['mediation.view', 'mediation.edit', 'mediation.complete', 'mediation.time.edit', 'refund.create']
+const mediationPermissionCodes = ['mediation.view', 'mediation.edit', 'mediation.return', 'mediation.complete', 'mediation.time.edit', 'refund.create']
 const qualityPermissionCodes = ['quality.view', 'quality.create']
 const oaPermissionCodes = ['oa.approvals.view', 'oa.approvals.create', 'oa.approvals.review', 'oa.approvals.pay']
 const contractPermissionCodes = ['contracts.view', 'contracts.create']

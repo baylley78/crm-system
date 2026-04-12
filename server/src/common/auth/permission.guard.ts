@@ -3,6 +3,8 @@ import { Reflector } from '@nestjs/core'
 import { REQUIRED_PERMISSION_KEY } from './require-permission.decorator'
 import type { AuthenticatedUser } from '../../modules/auth/auth.service'
 
+const SUPER_ADMIN_ROLE_CODE = 'SUPER_ADMIN'
+
 type PermissionRequest = Request & {
   currentUser?: AuthenticatedUser
 }
@@ -21,6 +23,10 @@ export class PermissionGuard implements CanActivate {
     const currentUser = request.currentUser
     if (!currentUser) {
       throw new ForbiddenException('无权访问该功能')
+    }
+
+    if (currentUser.roleCode === SUPER_ADMIN_ROLE_CODE) {
+      return true
     }
 
     if (!currentUser.permissions?.includes(requiredPermission)) {

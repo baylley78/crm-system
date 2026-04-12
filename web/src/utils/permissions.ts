@@ -1,6 +1,19 @@
 import { authStorage } from '../auth'
 
-export const hasPermission = (permission: string) => Boolean(authStorage.getUser()?.permissions?.includes(permission))
+const SUPER_ADMIN_ROLE_CODE = 'SUPER_ADMIN'
+
+export const hasPermission = (permission: string) => {
+  const user = authStorage.getUser()
+  if (!user) {
+    return false
+  }
+
+  if (user.roleCode === SUPER_ADMIN_ROLE_CODE) {
+    return true
+  }
+
+  return Boolean(user.permissions?.includes(permission))
+}
 
 export const hasAnyPermission = (permissions: string[]) => permissions.some((permission) => hasPermission(permission))
 
