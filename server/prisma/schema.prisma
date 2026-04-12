@@ -734,16 +734,23 @@ model QualityRecord {
 }
 
 model TrafficStat {
-  id             Int        @id @default(autoincrement())
-  reportDate     DateTime
-  userId         Int
-  departmentId   Int?
-  transferCount  Int        @default(0)
-  receptionCount Int        @default(0)
-  user           User       @relation(fields: [userId], references: [id])
-  department     Department? @relation(fields: [departmentId], references: [id])
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id                       Int         @id @default(autoincrement())
+  reportDate               DateTime
+  userId                   Int
+  departmentId             Int?
+  firstSalesTeamName       String?
+  firstSalesDepartmentName String?
+  transferCount            Int         @default(0)
+  addCount                 Int         @default(0)
+  depositCount             Int         @default(0)
+  tailCount                Int         @default(0)
+  fullCount                Int         @default(0)
+  timelyCount              Int         @default(0)
+  totalPerformance         Decimal     @default(0)
+  user                     User        @relation(fields: [userId], references: [id])
+  department               Department? @relation(fields: [departmentId], references: [id])
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
 
   @@unique([reportDate, userId])
   @@index([reportDate])

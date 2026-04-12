@@ -386,40 +386,79 @@ export interface TrafficStatItem {
   reportDate: string
   userId: number
   userName: string
+  salesName: string
   departmentId?: number
   departmentName?: string
+  firstSalesTeamName?: string
+  firstSalesDepartmentName?: string
   transferCount: number
-  receptionCount: number
+  addCount: number
+  depositCount: number
+  tailCount: number
+  fullCount: number
+  timelyCount: number
+  totalPerformance: number
+  depositConversionRate: number
   conversionRate: number
+  lossRate: number
   createdAt: string
   updatedAt: string
 }
 
 export interface TrafficStatDailyForm {
   reportDate: string
+  salesName: string
+  firstSalesTeamName?: string
+  firstSalesDepartmentName?: string
   transferCount: number
-  receptionCount: number
+  addCount: number
+  depositCount: number
+  tailCount: number
+  fullCount: number
+  timelyCount: number
+  totalPerformance: number
+  depositConversionRate: number
   conversionRate: number
+  lossRate: number
 }
 
 export interface SaveTrafficStatPayload {
   reportDate: string
   transferCount: number
-  receptionCount: number
+  addCount: number
+  depositCount: number
+  tailCount: number
+  fullCount: number
+  timelyCount: number
+  totalPerformance: number
 }
 
 export interface TrafficStatSummaryRow {
   date: string
   transferCount: number
-  receptionCount: number
+  addCount: number
+  depositCount: number
+  tailCount: number
+  fullCount: number
+  timelyCount: number
+  totalPerformance: number
+  depositConversionRate: number
   conversionRate: number
+  lossRate: number
 }
 
 export interface TrafficStatSummaryResponse {
   totals: {
     transferCount: number
-    receptionCount: number
+    addCount: number
+    depositCount: number
+    tailCount: number
+    fullCount: number
+    timelyCount: number
+    totalPerformance: number
+    depositConversionRate: number
     conversionRate: number
+    lossRate: number
   }
   rows: TrafficStatSummaryRow[]
 }

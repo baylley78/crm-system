@@ -6,6 +6,19 @@ import { DepartmentsService } from '../departments/departments.service'
 import { SaveTrafficStatDto } from './dto/save-traffic-stat.dto'
 import { TrafficStatsQueryDto } from './dto/traffic-stats-query.dto'
 
+type TrafficStatUserContext = {
+  id?: number | null
+  realName?: string | null
+  department?: string | null
+  departmentId?: number | null
+  departmentInfo?: {
+    name?: string | null
+    parent?: {
+      name?: string | null
+    } | null
+  } | null
+} | null
+
 @Injectable()
 export class TrafficStatsService {
   constructor(
@@ -15,26 +28,43 @@ export class TrafficStatsService {
 
   async getMyDailyStat(currentUser: AuthenticatedUser, date?: string) {
     const reportDate = this.resolveReportDate(date)
-    const item = await this.prisma.trafficStat.findUnique({
-      where: {
-        reportDate_userId: {
-          reportDate,
-          userId: currentUser.id,
+    const [item, userContext] = await Promise.all([
+      this.prisma.trafficStat.findUnique({
+        where: {
+          reportDate_userId: {
+            reportDate,
+            userId: currentUser.id,
+          },
         },
-      },
-    })
+      }),
+      this.loadTrafficStatUserContext(currentUser.id),
+    ])
 
+    const metrics = this.buildMetrics(item)
     return {
       reportDate: this.toDateKey(reportDate),
+      salesName: currentUser.realName,
+      firstSalesTeamName: item?.firstSalesTeamName || this.resolveFirstSalesTeamName(userContext) || currentUser.department || undefined,
+      firstSalesDepartmentName: item?.firstSalesDepartmentName || this.resolveFirstSalesDepartmentName(userContext) || currentUser.department || undefined,
       transferCount: item?.transferCount ?? 0,
-      receptionCount: item?.receptionCount ?? 0,
-      conversionRate: this.calculateConversionRate(item?.transferCount ?? 0, item?.receptionCount ?? 0),
+      addCount: item?.addCount ?? 0,
+      depositCount: item?.depositCount ?? 0,
+      tailCount: item?.tailCount ?? 0,
+      fullCount: item?.fullCount ?? 0,
+      timelyCount: item?.timelyCount ?? 0,
+      totalPerformance: Number(item?.totalPerformance ?? 0),
+      depositConversionRate: metrics.depositConversionRate,
+      conversionRate: metrics.conversionRate,
+      lossRate: metrics.lossRate,
     }
   }
 
   async saveMyDailyStat(currentUser: AuthenticatedUser, dto: SaveTrafficStatDto) {
     const reportDate = this.resolveReportDate(dto.reportDate)
-    const departmentId = currentUser.departmentId ?? null
+    const userContext = await this.loadTrafficStatUserContext(currentUser.id)
+    const departmentId = currentUser.departmentId ?? userContext?.departmentId ?? null
+    const firstSalesTeamName = this.resolveFirstSalesTeamName(userContext) || currentUser.department || undefined
+    const firstSalesDepartmentName = this.resolveFirstSalesDepartmentName(userContext) || currentUser.department || undefined
 
     const item = await this.prisma.trafficStat.upsert({
       where: {
@@ -47,18 +77,36 @@ export class TrafficStatsService {
         reportDate,
         userId: currentUser.id,
         departmentId,
+        firstSalesTeamName,
+        firstSalesDepartmentName,
         transferCount: dto.transferCount,
-        receptionCount: dto.receptionCount,
+        addCount: dto.addCount,
+        depositCount: dto.depositCount,
+        tailCount: dto.tailCount,
+        fullCount: dto.fullCount,
+        timelyCount: dto.timelyCount,
+        totalPerformance: dto.totalPerformance,
       },
       update: {
         departmentId,
+        firstSalesTeamName,
+        firstSalesDepartmentName,
         transferCount: dto.transferCount,
-        receptionCount: dto.receptionCount,
+        addCount: dto.addCount,
+        depositCount: dto.depositCount,
+        tailCount: dto.tailCount,
+        fullCount: dto.fullCount,
+        timelyCount: dto.timelyCount,
+        totalPerformance: dto.totalPerformance,
       },
       include: {
         user: {
           include: {
-            departmentInfo: true,
+            departmentInfo: {
+              include: {
+                parent: true,
+              },
+            },
           },
         },
         department: true,
@@ -78,7 +126,11 @@ export class TrafficStatsService {
       include: {
         user: {
           include: {
-            departmentInfo: true,
+            departmentInfo: {
+              include: {
+                parent: true,
+              },
+            },
           },
         },
         department: true,
@@ -101,35 +153,68 @@ export class TrafficStatsService {
       },
       _sum: {
         transferCount: true,
-        receptionCount: true,
+        addCount: true,
+        depositCount: true,
+        tailCount: true,
+        fullCount: true,
+        timelyCount: true,
+        totalPerformance: true,
       },
       orderBy: { reportDate: 'desc' },
     })
 
     const rows = groups.map((group) => {
-      const transferCount = group._sum.transferCount ?? 0
-      const receptionCount = group._sum.receptionCount ?? 0
+      const stats = this.normalizeStats({
+        transferCount: group._sum.transferCount,
+        addCount: group._sum.addCount,
+        depositCount: group._sum.depositCount,
+        tailCount: group._sum.tailCount,
+        fullCount: group._sum.fullCount,
+        timelyCount: group._sum.timelyCount,
+        totalPerformance: group._sum.totalPerformance,
+      })
+      const metrics = this.buildMetrics(stats)
       return {
         date: this.toDateKey(group.reportDate),
-        transferCount,
-        receptionCount,
-        conversionRate: this.calculateConversionRate(transferCount, receptionCount),
+        transferCount: stats.transferCount,
+        addCount: stats.addCount,
+        depositCount: stats.depositCount,
+        tailCount: stats.tailCount,
+        fullCount: stats.fullCount,
+        timelyCount: stats.timelyCount,
+        totalPerformance: stats.totalPerformance,
+        depositConversionRate: metrics.depositConversionRate,
+        conversionRate: metrics.conversionRate,
+        lossRate: metrics.lossRate,
       }
     })
 
     const totals = rows.reduce(
       (result, item) => {
         result.transferCount += item.transferCount
-        result.receptionCount += item.receptionCount
+        result.addCount += item.addCount
+        result.depositCount += item.depositCount
+        result.tailCount += item.tailCount
+        result.fullCount += item.fullCount
+        result.timelyCount += item.timelyCount
+        result.totalPerformance += item.totalPerformance
         return result
       },
-      { transferCount: 0, receptionCount: 0 },
+      {
+        transferCount: 0,
+        addCount: 0,
+        depositCount: 0,
+        tailCount: 0,
+        fullCount: 0,
+        timelyCount: 0,
+        totalPerformance: 0,
+      },
     )
 
     return {
       totals: {
         ...totals,
-        conversionRate: this.calculateConversionRate(totals.transferCount, totals.receptionCount),
+        ...this.buildMetrics(totals),
       },
       rows,
     }
@@ -156,19 +241,70 @@ export class TrafficStatsService {
   }
 
   private mapRow(item: any) {
-    const departmentName = item.department?.name || item.user?.departmentInfo?.name || item.user?.department || ''
+    const stats = this.normalizeStats(item)
+    const metrics = this.buildMetrics(stats)
     return {
       id: item.id,
       reportDate: this.toDateKey(item.reportDate),
       userId: item.userId,
       userName: item.user?.realName || '',
+      salesName: item.user?.realName || '',
       departmentId: item.departmentId ?? item.user?.departmentId ?? undefined,
-      departmentName,
-      transferCount: item.transferCount,
-      receptionCount: item.receptionCount,
-      conversionRate: this.calculateConversionRate(item.transferCount, item.receptionCount),
+      departmentName: item.department?.name || item.user?.departmentInfo?.name || item.user?.department || '',
+      firstSalesTeamName: item.firstSalesTeamName || this.resolveFirstSalesTeamName(item.user),
+      firstSalesDepartmentName: item.firstSalesDepartmentName || this.resolveFirstSalesDepartmentName(item.user),
+      transferCount: stats.transferCount,
+      addCount: stats.addCount,
+      depositCount: stats.depositCount,
+      tailCount: stats.tailCount,
+      fullCount: stats.fullCount,
+      timelyCount: stats.timelyCount,
+      totalPerformance: stats.totalPerformance,
+      depositConversionRate: metrics.depositConversionRate,
+      conversionRate: metrics.conversionRate,
+      lossRate: metrics.lossRate,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
+    }
+  }
+
+  private normalizeStats(source?: {
+    transferCount?: number | null
+    addCount?: number | null
+    depositCount?: number | null
+    tailCount?: number | null
+    fullCount?: number | null
+    timelyCount?: number | null
+    totalPerformance?: Prisma.Decimal | number | null
+  } | null) {
+    return {
+      transferCount: source?.transferCount ?? 0,
+      addCount: source?.addCount ?? 0,
+      depositCount: source?.depositCount ?? 0,
+      tailCount: source?.tailCount ?? 0,
+      fullCount: source?.fullCount ?? 0,
+      timelyCount: source?.timelyCount ?? 0,
+      totalPerformance: Number(source?.totalPerformance ?? 0),
+    }
+  }
+
+  private buildMetrics(source?: {
+    addCount?: number | null
+    depositCount?: number | null
+    tailCount?: number | null
+    fullCount?: number | null
+  } | null) {
+    const addCount = source?.addCount ?? 0
+    const depositCount = source?.depositCount ?? 0
+    const tailCount = source?.tailCount ?? 0
+    const fullCount = source?.fullCount ?? 0
+    const convertedCount = depositCount + tailCount + fullCount
+    const lostCount = Math.max(addCount - convertedCount, 0)
+
+    return {
+      depositConversionRate: this.calculateRate(depositCount, addCount),
+      conversionRate: this.calculateRate(convertedCount, addCount),
+      lossRate: this.calculateRate(lostCount, addCount),
     }
   }
 
@@ -192,11 +328,41 @@ export class TrafficStatsService {
     return date.toISOString().slice(0, 10)
   }
 
-  private calculateConversionRate(transferCount: number, receptionCount: number) {
-    if (!transferCount) {
+  private calculateRate(numerator: number, denominator: number) {
+    if (!denominator) {
       return 0
     }
-    return Number((receptionCount / transferCount).toFixed(4))
+    return Number((numerator / denominator).toFixed(4))
+  }
+
+  private resolveFirstSalesTeamName(user?: TrafficStatUserContext) {
+    return user?.departmentInfo?.parent?.name || user?.departmentInfo?.name || user?.department || undefined
+  }
+
+  private resolveFirstSalesDepartmentName(user?: TrafficStatUserContext) {
+    return user?.departmentInfo?.name || user?.department || undefined
+  }
+
+  private async loadTrafficStatUserContext(userId: number): Promise<TrafficStatUserContext> {
+    return this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        realName: true,
+        department: true,
+        departmentId: true,
+        departmentInfo: {
+          select: {
+            name: true,
+            parent: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    })
   }
 
   private async buildVisibleDepartmentIds(currentUser: AuthenticatedUser): Promise<number[] | null> {
