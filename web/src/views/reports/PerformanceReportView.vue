@@ -53,6 +53,7 @@ type StageRowMap = {
 type CurrentRow = StageRowMap[typeof props.stage][typeof props.scope]
 
 const loading = ref(false)
+const initialized = ref(false)
 const filters = reactive<ReportQueryParams>({
   startDate: '',
   endDate: '',
@@ -172,13 +173,10 @@ const buildQuickRange = (range: 'day' | 'week' | 'month') => {
   return { start, end }
 }
 
-const syncDateRangeFilters = (start?: Date, end?: Date, resetQuickRange = false) => {
+const syncDateRangeFilters = (start?: Date, end?: Date) => {
   dateRange.value = start && end ? [start, end] : []
   filters.startDate = start ? start.toISOString() : ''
   filters.endDate = end ? end.toISOString() : ''
-  if (resetQuickRange) {
-    activeQuickRange.value = ''
-  }
 }
 
 const applyQuickRange = async (range: 'day' | 'week' | 'month') => {
@@ -189,8 +187,8 @@ const applyQuickRange = async (range: 'day' | 'week' | 'month') => {
     startDate: start.toISOString(),
     endDate: end.toISOString(),
   })
+  initialized.value = true
 }
-
 const loadDepartmentOptions = async () => {
   const response = await fetchReportDepartments(props.stage)
   departmentOptions.value = response.options
@@ -232,6 +230,7 @@ onMounted(async () => {
     <el-card>
       <template #header>{{ title }}</template>
       <el-alert title="报表统计按当前时间、部门、权限范围展示订单汇总数据，不会因为客户后续流转到其他阶段而丢失历史订单数据。" type="info" :closable="false" show-icon />
+      <el-alert v-if="!initialized" title="正在加载默认报表数据，请稍候。" type="success" :closable="false" show-icon />
       <el-form inline>
         <el-form-item label="快捷筛选">
           <el-space>
