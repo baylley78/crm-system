@@ -69,7 +69,7 @@ export class TrafficStatsService {
 
   async getMyDailyStat(currentUser: AuthenticatedUser, date?: string) {
     const reportDate = this.resolveReportDate(date)
-    const [item, userContext] = await Promise.all([
+    const [item, userContext, crmStatsMap] = await Promise.all([
       this.prisma.trafficStat.findUnique({
         where: {
           reportDate_userId: {
@@ -79,9 +79,15 @@ export class TrafficStatsService {
         },
       }),
       this.loadTrafficStatUserContext(currentUser.id),
+      this.loadCrmStatsByUserDatePairs([{ userId: currentUser.id, reportDate }]),
     ])
 
-    const stats = this.normalizeStats(item)
+    const crmStats = crmStatsMap.get(this.buildUserDateKey(currentUser.id, reportDate)) || this.createEmptyCrmStats()
+    const stats = this.normalizeStats({
+      transferCount: item?.transferCount,
+      addCount: item?.addCount,
+      ...crmStats,
+    })
     const metrics = this.buildMetrics(stats)
     return {
       reportDate: this.toDateKey(reportDate),
