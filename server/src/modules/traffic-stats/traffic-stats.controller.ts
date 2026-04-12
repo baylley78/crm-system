@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common'
 import { CurrentUser } from '../../common/auth/current-user.decorator'
 import { CurrentUserGuard } from '../../common/auth/current-user.guard'
 import { PermissionGuard } from '../../common/auth/permission.guard'
@@ -54,5 +54,14 @@ export class TrafficStatsController {
   async getDepartments(@CurrentUser() currentUser: AuthenticatedUser) {
     const options = await this.trafficStatsService.getDepartmentOptions(currentUser)
     return { options }
+  }
+
+  @Delete(':id')
+  @RequirePermission('trafficStats.delete')
+  deleteTrafficStat(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.trafficStatsService.deleteTrafficStat(currentUser, id)
   }
 }

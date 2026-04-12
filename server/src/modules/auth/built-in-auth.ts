@@ -96,6 +96,7 @@ export const BUILT_IN_PERMISSION_DEFINITIONS: BuiltInPermissionDefinition[] = [
   { code: 'quality.create', name: '新增质检记录' },
   { code: 'trafficStats.submit', name: '填报来客接待统计' },
   { code: 'trafficStats.view', name: '查看来客接待统计' },
+  { code: 'trafficStats.delete', name: '删除来客接待统计' },
   { code: 'system.users.view', name: '查看用户' },
   { code: 'system.users.create', name: '新增用户' },
   { code: 'system.users.edit', name: '编辑用户' },
@@ -194,7 +195,7 @@ const legalPermissionCodes = ['legal.view', 'legal.edit']
 const legalManagerExtraPermissionCodes = ['legal.assign', 'legal.filing.review', 'legal.pretrial.handle', 'legal.close', 'legal.transfer']
 const mediationPermissionCodes = ['mediation.view', 'mediation.edit', 'mediation.return', 'mediation.complete', 'mediation.time.edit', 'refund.create']
 const qualityPermissionCodes = ['quality.view', 'quality.create']
-const trafficStatsPermissionCodes = ['trafficStats.submit', 'trafficStats.view']
+const trafficStatsPermissionCodes = ['trafficStats.submit', 'trafficStats.view', 'trafficStats.delete']
 const oaPermissionCodes = ['oa.approvals.view', 'oa.approvals.create', 'oa.approvals.review', 'oa.approvals.pay']
 const contractPermissionCodes = ['contracts.view', 'contracts.create']
 const refundManagerPermissionCodes = ['refund.view', 'refund.create', 'refund.review', 'refund.assign', 'refund.edit', 'refund.close', 'refund.department.edit', 'refund.delete', 'quality.view']

@@ -78,6 +78,8 @@ const columns = computed(() => {
   if (props.stage === 'first-sales' && props.scope === 'personal') {
     return [
       { key: 'userName', label: '人员名字' },
+      { key: 'transferCount', label: '转入' },
+      { key: 'addCount', label: '添加' },
       { key: 'timelyCount', label: '及时' },
       { key: 'depositCount', label: '定金成交' },
       { key: 'tailCount', label: '尾款成交' },
@@ -92,6 +94,8 @@ const columns = computed(() => {
   if (props.stage === 'first-sales' && props.scope === 'team') {
     return [
       { key: 'date', label: '日期' },
+      { key: 'transferCount', label: '转入' },
+      { key: 'addCount', label: '添加' },
       { key: 'timelyCount', label: '及时' },
       { key: 'depositCount', label: '定金成交' },
       { key: 'tailCount', label: '尾款成交' },

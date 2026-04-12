@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ElMessage } from 'element-plus'
+import { Delete } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { hasPermission } from '../../utils/permissions'
-import { fetchMyTrafficStat, fetchTrafficStatDepartments, fetchTrafficStats, saveMyTrafficStat } from '../../api/traffic-stats'
+import { deleteTrafficStat, fetchMyTrafficStat, fetchTrafficStatDepartments, fetchTrafficStats, saveMyTrafficStat } from '../../api/traffic-stats'
 import type { ReportDepartmentOption, ReportQueryParams, SaveTrafficStatPayload, TrafficStatDailyForm, TrafficStatItem } from '../../types'
 
 const canSubmit = computed(() => hasPermission('trafficStats.submit'))
 const canView = computed(() => hasPermission('trafficStats.view'))
+const canDelete = computed(() => hasPermission('trafficStats.delete'))
 
 const loading = ref(false)
 const saving = ref(false)
@@ -144,6 +146,23 @@ const submit = async () => {
   }
 }
 
+const handleDelete = async (item: TrafficStatItem) => {
+  await ElMessageBox.confirm(`确认删除 ${item.salesName || '该销售'} 在 ${item.reportDate} 的来客统计吗？删除后可重新填报。`, '删除来客统计', {
+    type: 'warning',
+    confirmButtonText: '确认删除',
+    cancelButtonText: '取消',
+  })
+
+  loading.value = true
+  try {
+    await deleteTrafficStat(item.id)
+    ElMessage.success('来客统计已删除')
+    await loadStats()
+  } finally {
+    loading.value = false
+  }
+}
+
 const resetFilters = async () => {
   filters.departmentId = undefined
   applyQuickRange('day')
@@ -242,6 +261,13 @@ onMounted(async () => {
             <el-table-column label="更新时间" min-width="180">
               <template #default="scope">
                 {{ formatDateTime(scope.row.updatedAt) }}
+              </template>
+            </el-table-column>
+            <el-table-column v-if="canDelete" label="操作" fixed="right" width="80">
+              <template #default="scope">
+                <el-tooltip content="删除来客统计" placement="top">
+                  <el-button link type="danger" :icon="Delete" @click="handleDelete(scope.row)" />
+                </el-tooltip>
               </template>
             </el-table-column>
           </el-table>

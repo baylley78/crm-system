@@ -317,6 +317,8 @@ export interface ReportSummaryCard {
 
 export interface FirstSalesPersonalRow {
   userName: string
+  transferCount: number
+  addCount: number
   timelyCount: number
   depositCount: number
   tailCount: number
@@ -330,6 +332,8 @@ export interface FirstSalesPersonalRow {
 
 export interface FirstSalesTeamRow {
   date: string
+  transferCount: number
+  addCount: number
   timelyCount: number
   depositCount: number
   tailCount: number

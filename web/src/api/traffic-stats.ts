@@ -21,6 +21,11 @@ export const saveMyTrafficStat = async (payload: SaveTrafficStatPayload) => {
   return data
 }
 
+export const deleteTrafficStat = async (id: number) => {
+  const { data } = await request.delete<{ success: boolean }>(`/traffic-stats/${id}`)
+  return data
+}
+
 export const fetchTrafficStats = async (params: ReportQueryParams = {}) => {
   const { data } = await request.get<ReportRowsResponse<TrafficStatItem>>('/traffic-stats', { params })
   return data

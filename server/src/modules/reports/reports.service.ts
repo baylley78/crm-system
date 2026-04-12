@@ -60,6 +60,8 @@ export interface ReportDetailRow {
 
 export interface FirstSalesPersonalRow {
   userName: string
+  transferCount: number
+  addCount: number
   timelyCount: number
   depositCount: number
   tailCount: number
@@ -73,6 +75,8 @@ export interface FirstSalesPersonalRow {
 
 export interface FirstSalesTeamRow {
   date: string
+  transferCount: number
+  addCount: number
   timelyCount: number
   depositCount: number
   tailCount: number
@@ -196,15 +200,27 @@ export class ReportsService {
       orderDate: this.buildDateFilter(query),
       ...(await this.buildFirstSalesVisibilityWhere(currentUser, query.departmentId)),
     }
-    const groups = await this.prisma.firstSalesOrder.groupBy({
-      by: ['salesUserId', 'orderType', 'isTimelyDeal'],
-      where,
-      _count: { _all: true },
-      _sum: { paymentAmount: true },
-      orderBy: { salesUserId: 'asc' },
-    })
+    const trafficStatWhere = {
+      reportDate: this.buildDateFilter(query),
+      ...(await this.buildTrafficStatVisibilityWhere(currentUser, query.departmentId)),
+    }
+    const [groups, trafficStatGroups] = await Promise.all([
+      this.prisma.firstSalesOrder.groupBy({
+        by: ['salesUserId', 'orderType', 'isTimelyDeal'],
+        where,
+        _count: { _all: true },
+        _sum: { paymentAmount: true },
+        orderBy: { salesUserId: 'asc' },
+      }),
+      this.prisma.trafficStat.groupBy({
+        by: ['userId'],
+        where: trafficStatWhere,
+        _sum: { transferCount: true, addCount: true },
+        orderBy: { userId: 'asc' },
+      }),
+    ])
 
-    const salesUserIds = Array.from(new Set(groups.map((item) => item.salesUserId)))
+    const salesUserIds = Array.from(new Set([...groups.map((item) => item.salesUserId), ...trafficStatGroups.map((item) => item.userId)]))
     const users = salesUserIds.length
       ? await this.prisma.user.findMany({
           where: { id: { in: salesUserIds } },
@@ -217,6 +233,8 @@ export class ReportsService {
     for (const group of groups) {
       const current = map.get(group.salesUserId) || {
         userName: userNameMap.get(group.salesUserId) || '',
+        transferCount: 0,
+        addCount: 0,
         timelyCount: 0,
         depositCount: 0,
         tailCount: 0,
@@ -248,7 +266,27 @@ export class ReportsService {
       map.set(group.salesUserId, current)
     }
 
-    return { rows: Array.from(map.values()).sort((a, b) => b.totalAmount - a.totalAmount) }
+    for (const group of trafficStatGroups) {
+      const current = map.get(group.userId) || {
+        userName: userNameMap.get(group.userId) || '',
+        transferCount: 0,
+        addCount: 0,
+        timelyCount: 0,
+        depositCount: 0,
+        tailCount: 0,
+        fullCount: 0,
+        depositAmount: 0,
+        tailAmount: 0,
+        fullAmount: 0,
+        totalAmount: 0,
+        avgAmount: 0,
+      }
+      current.transferCount = group._sum.transferCount ?? 0
+      current.addCount = group._sum.addCount ?? 0
+      map.set(group.userId, current)
+    }
+
+    return { rows: Array.from(map.values()).sort((a, b) => b.totalAmount - a.totalAmount || b.transferCount - a.transferCount) }
   }
 
   async getFirstSalesTeam(currentUser: AuthenticatedUser, query: ReportQuery): Promise<{ rows: FirstSalesTeamRow[] }> {
@@ -256,19 +294,33 @@ export class ReportsService {
       orderDate: this.buildDateFilter(query),
       ...(await this.buildFirstSalesVisibilityWhere(currentUser, query.departmentId)),
     }
-    const groups = await this.prisma.firstSalesOrder.groupBy({
-      by: ['orderDate', 'orderType', 'isTimelyDeal'],
-      where,
-      _count: { _all: true },
-      _sum: { paymentAmount: true },
-      orderBy: { orderDate: 'desc' },
-    })
+    const trafficStatWhere = {
+      reportDate: this.buildDateFilter(query),
+      ...(await this.buildTrafficStatVisibilityWhere(currentUser, query.departmentId)),
+    }
+    const [groups, trafficStatGroups] = await Promise.all([
+      this.prisma.firstSalesOrder.groupBy({
+        by: ['orderDate', 'orderType', 'isTimelyDeal'],
+        where,
+        _count: { _all: true },
+        _sum: { paymentAmount: true },
+        orderBy: { orderDate: 'desc' },
+      }),
+      this.prisma.trafficStat.groupBy({
+        by: ['reportDate'],
+        where: trafficStatWhere,
+        _sum: { transferCount: true, addCount: true },
+        orderBy: { reportDate: 'desc' },
+      }),
+    ])
 
     const map = new Map<string, FirstSalesTeamRow>()
     for (const group of groups) {
       const key = this.toDateKey(group.orderDate)
       const current = map.get(key) || {
         date: key,
+        transferCount: 0,
+        addCount: 0,
         timelyCount: 0,
         depositCount: 0,
         tailCount: 0,
@@ -297,6 +349,27 @@ export class ReportsService {
       current.totalAmount += amount
       const totalCount = current.depositCount + current.tailCount + current.fullCount
       current.avgAmount = totalCount ? Number((current.totalAmount / totalCount).toFixed(2)) : 0
+      map.set(key, current)
+    }
+
+    for (const group of trafficStatGroups) {
+      const key = this.toDateKey(group.reportDate)
+      const current = map.get(key) || {
+        date: key,
+        transferCount: 0,
+        addCount: 0,
+        timelyCount: 0,
+        depositCount: 0,
+        tailCount: 0,
+        fullCount: 0,
+        depositAmount: 0,
+        tailAmount: 0,
+        fullAmount: 0,
+        totalAmount: 0,
+        avgAmount: 0,
+      }
+      current.transferCount = group._sum.transferCount ?? 0
+      current.addCount = group._sum.addCount ?? 0
       map.set(key, current)
     }
 
@@ -660,6 +733,24 @@ export class ReportsService {
       case DataScope.DEPARTMENT_AND_CHILDREN: {
         const departmentIds = await this.resolveFilteredDepartmentIds(currentUser, departmentId)
         return departmentIds ? { salesUser: { departmentId: { in: departmentIds } } } : { id: -1 }
+      }
+      default:
+        return { id: -1 }
+    }
+  }
+
+  private async buildTrafficStatVisibilityWhere(currentUser: AuthenticatedUser, departmentId?: string): Promise<Prisma.TrafficStatWhereInput> {
+    switch (currentUser.reportScope) {
+      case DataScope.ALL: {
+        const filteredDepartmentIds = departmentId ? [Number(departmentId)].filter(Number.isFinite) : null
+        return filteredDepartmentIds?.length ? { departmentId: { in: filteredDepartmentIds } } : {}
+      }
+      case DataScope.SELF:
+        return { userId: currentUser.id }
+      case DataScope.DEPARTMENT:
+      case DataScope.DEPARTMENT_AND_CHILDREN: {
+        const departmentIds = await this.resolveFilteredDepartmentIds(currentUser, departmentId)
+        return departmentIds ? { departmentId: { in: departmentIds } } : { id: -1 }
       }
       default:
         return { id: -1 }
