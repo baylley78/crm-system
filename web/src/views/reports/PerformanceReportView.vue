@@ -212,7 +212,9 @@ const loadData = async (overrideParams?: ReportQueryParams) => {
 }
 
 watch(dateRange, (value) => {
-  syncDateRangeFilters(value[0], value[1], true)
+  filters.startDate = value[0] ? value[0].toISOString() : ''
+  filters.endDate = value[1] ? value[1].toISOString() : ''
+  activeQuickRange.value = ''
 })
 
 onMounted(async () => {
