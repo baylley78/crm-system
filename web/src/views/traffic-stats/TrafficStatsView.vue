@@ -3,7 +3,7 @@ import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { hasPermission } from '../../utils/permissions'
 import { fetchMyTrafficStat, fetchTrafficStatDepartments, fetchTrafficStats, saveMyTrafficStat } from '../../api/traffic-stats'
-import type { ReportDepartmentOption, ReportQueryParams, SaveTrafficStatPayload, TrafficStatItem } from '../../types'
+import type { ReportDepartmentOption, ReportQueryParams, SaveTrafficStatPayload, TrafficStatDailyForm, TrafficStatItem } from '../../types'
 
 const canSubmit = computed(() => hasPermission('trafficStats.submit'))
 const canView = computed(() => hasPermission('trafficStats.view'))
@@ -23,30 +23,25 @@ const form = reactive<SaveTrafficStatPayload>({
   reportDate: new Date().toISOString().slice(0, 10),
   transferCount: 0,
   addCount: 0,
+})
+const crmFormStats = reactive<Omit<TrafficStatDailyForm, 'reportDate' | 'salesName' | 'firstSalesTeamName' | 'firstSalesDepartmentName' | 'transferCount' | 'addCount'>>({
   depositCount: 0,
   tailCount: 0,
   fullCount: 0,
   timelyCount: 0,
   totalPerformance: 0,
+  depositConversionRate: 0,
+  conversionRate: 0,
+  lossRate: 0,
 })
 const formSalesName = ref('-')
 const formFirstSalesTeamName = ref('-')
 const formFirstSalesDepartmentName = ref('-')
 
-const formDepositConversionRate = computed(() => calculateRate(form.depositCount, form.addCount))
-const formConversionRate = computed(() => calculateRate(form.depositCount + form.tailCount + form.fullCount, form.addCount))
-const formLossRate = computed(() => calculateRate(Math.max(form.addCount - form.depositCount - form.tailCount - form.fullCount, 0), form.addCount))
 const formTeamDepartmentText = computed(() => `${formFirstSalesTeamName.value || '-'} / ${formFirstSalesDepartmentName.value || '-'}`)
 const formatPercent = (value: number) => `${(Number(value || 0) * 100).toFixed(2)}%`
 const formatDateTime = (value?: string) => value?.replace('T', ' ').slice(0, 19) || '-'
 const formatPerformance = (value: number) => Number(value || 0).toFixed(2)
-
-function calculateRate(numerator: number, denominator: number) {
-  if (!denominator) {
-    return 0
-  }
-  return Number((numerator / denominator).toFixed(4))
-}
 
 const applyQuickRange = (range: 'day' | 'week' | 'month') => {
   const end = new Date()
@@ -69,22 +64,29 @@ const applyQuickRange = (range: 'day' | 'week' | 'month') => {
   dateRange.value = [start, end]
 }
 
+const applyFormData = (data: TrafficStatDailyForm) => {
+  formSalesName.value = data.salesName || '-'
+  formFirstSalesTeamName.value = data.firstSalesTeamName || '-'
+  formFirstSalesDepartmentName.value = data.firstSalesDepartmentName || '-'
+  form.transferCount = data.transferCount
+  form.addCount = data.addCount
+  crmFormStats.depositCount = data.depositCount
+  crmFormStats.tailCount = data.tailCount
+  crmFormStats.fullCount = data.fullCount
+  crmFormStats.timelyCount = data.timelyCount
+  crmFormStats.totalPerformance = Number(data.totalPerformance || 0)
+  crmFormStats.depositConversionRate = data.depositConversionRate
+  crmFormStats.conversionRate = data.conversionRate
+  crmFormStats.lossRate = data.lossRate
+}
+
 const loadForm = async () => {
   if (!canSubmit.value) {
     return
   }
 
   const data = await fetchMyTrafficStat(form.reportDate)
-  formSalesName.value = data.salesName || '-'
-  formFirstSalesTeamName.value = data.firstSalesTeamName || '-'
-  formFirstSalesDepartmentName.value = data.firstSalesDepartmentName || '-'
-  form.transferCount = data.transferCount
-  form.addCount = data.addCount
-  form.depositCount = data.depositCount
-  form.tailCount = data.tailCount
-  form.fullCount = data.fullCount
-  form.timelyCount = data.timelyCount
-  form.totalPerformance = Number(data.totalPerformance || 0)
+  applyFormData(data)
 }
 
 const openDrawer = async () => {
@@ -126,13 +128,9 @@ const submit = async () => {
       reportDate: form.reportDate,
       transferCount: Number(form.transferCount || 0),
       addCount: Number(form.addCount || 0),
-      depositCount: Number(form.depositCount || 0),
-      tailCount: Number(form.tailCount || 0),
-      fullCount: Number(form.fullCount || 0),
-      timelyCount: Number(form.timelyCount || 0),
-      totalPerformance: Number(form.totalPerformance || 0),
     })
     ElMessage.success('来客统计已添加')
+    await loadForm()
     drawerVisible.value = false
     await loadStats()
   } finally {
@@ -268,28 +266,28 @@ onMounted(async () => {
             <el-input v-model.number="form.addCount" type="number" min="0" placeholder="请输入添加数量" />
           </el-form-item>
           <el-form-item label="定金">
-            <el-input v-model.number="form.depositCount" type="number" min="0" placeholder="请输入定金数量" />
+            <div class="static-text">{{ crmFormStats.depositCount }}</div>
           </el-form-item>
           <el-form-item label="尾款">
-            <el-input v-model.number="form.tailCount" type="number" min="0" placeholder="请输入尾款数量" />
+            <div class="static-text">{{ crmFormStats.tailCount }}</div>
           </el-form-item>
           <el-form-item label="全款">
-            <el-input v-model.number="form.fullCount" type="number" min="0" placeholder="请输入全款数量" />
+            <div class="static-text">{{ crmFormStats.fullCount }}</div>
           </el-form-item>
           <el-form-item label="及时">
-            <el-input v-model.number="form.timelyCount" type="number" min="0" placeholder="请输入及时数量" />
+            <div class="static-text">{{ crmFormStats.timelyCount }}</div>
           </el-form-item>
           <el-form-item label="总业绩">
-            <el-input v-model.number="form.totalPerformance" type="number" min="0" step="0.01" placeholder="请输入总业绩" />
+            <div class="static-text">{{ formatPerformance(crmFormStats.totalPerformance) }}</div>
           </el-form-item>
           <el-form-item label="定金转化率">
-            <div class="static-text">{{ formatPercent(formDepositConversionRate) }}</div>
+            <div class="static-text">{{ formatPercent(crmFormStats.depositConversionRate) }}</div>
           </el-form-item>
           <el-form-item label="转化率">
-            <div class="static-text">{{ formatPercent(formConversionRate) }}</div>
+            <div class="static-text">{{ formatPercent(crmFormStats.conversionRate) }}</div>
           </el-form-item>
           <el-form-item label="流失率">
-            <div class="static-text">{{ formatPercent(formLossRate) }}</div>
+            <div class="static-text">{{ formatPercent(crmFormStats.lossRate) }}</div>
           </el-form-item>
         </el-form>
         <div class="drawer-actions">

@@ -426,11 +426,6 @@ export interface SaveTrafficStatPayload {
   reportDate: string
   transferCount: number
   addCount: number
-  depositCount: number
-  tailCount: number
-  fullCount: number
-  timelyCount: number
-  totalPerformance: number
 }
 
 export interface TrafficStatSummaryRow {

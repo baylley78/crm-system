@@ -19,6 +19,44 @@ type TrafficStatUserContext = {
   } | null
 } | null
 
+type TrafficStatManualRow = {
+  id: number
+  reportDate: Date
+  userId: number
+  departmentId: number | null
+  firstSalesTeamName: string | null
+  firstSalesDepartmentName: string | null
+  transferCount: number
+  addCount: number
+  createdAt: Date
+  updatedAt: Date
+  user?: TrafficStatUserContext
+  department?: {
+    name?: string | null
+  } | null
+}
+
+type TrafficStatCrmStats = {
+  depositCount: number
+  tailCount: number
+  fullCount: number
+  timelyCount: number
+  totalPerformance: number
+}
+
+type TrafficStatFullRow = TrafficStatManualRow & TrafficStatCrmStats
+
+type TrafficStatSummaryRow = {
+  date: string
+  transferCount: number
+  addCount: number
+  depositCount: number
+  tailCount: number
+  fullCount: number
+  timelyCount: number
+  totalPerformance: number
+}
+
 @Injectable()
 export class TrafficStatsService {
   constructor(
@@ -28,7 +66,7 @@ export class TrafficStatsService {
 
   async getMyDailyStat(currentUser: AuthenticatedUser, date?: string) {
     const reportDate = this.resolveReportDate(date)
-    const [item, userContext] = await Promise.all([
+    const [item, userContext, crmStatsMap] = await Promise.all([
       this.prisma.trafficStat.findUnique({
         where: {
           reportDate_userId: {
@@ -38,21 +76,28 @@ export class TrafficStatsService {
         },
       }),
       this.loadTrafficStatUserContext(currentUser.id),
+      this.loadCrmStatsByUserDatePairs([{ userId: currentUser.id, reportDate }]),
     ])
 
-    const metrics = this.buildMetrics(item)
+    const crmStats = crmStatsMap.get(this.buildUserDateKey(currentUser.id, reportDate)) || this.createEmptyCrmStats()
+    const stats = this.normalizeStats({
+      transferCount: item?.transferCount,
+      addCount: item?.addCount,
+      ...crmStats,
+    })
+    const metrics = this.buildMetrics(stats)
     return {
       reportDate: this.toDateKey(reportDate),
       salesName: currentUser.realName,
       firstSalesTeamName: item?.firstSalesTeamName || this.resolveFirstSalesTeamName(userContext) || currentUser.department || undefined,
       firstSalesDepartmentName: item?.firstSalesDepartmentName || this.resolveFirstSalesDepartmentName(userContext) || currentUser.department || undefined,
-      transferCount: item?.transferCount ?? 0,
-      addCount: item?.addCount ?? 0,
-      depositCount: item?.depositCount ?? 0,
-      tailCount: item?.tailCount ?? 0,
-      fullCount: item?.fullCount ?? 0,
-      timelyCount: item?.timelyCount ?? 0,
-      totalPerformance: Number(item?.totalPerformance ?? 0),
+      transferCount: stats.transferCount,
+      addCount: stats.addCount,
+      depositCount: stats.depositCount,
+      tailCount: stats.tailCount,
+      fullCount: stats.fullCount,
+      timelyCount: stats.timelyCount,
+      totalPerformance: stats.totalPerformance,
       depositConversionRate: metrics.depositConversionRate,
       conversionRate: metrics.conversionRate,
       lossRate: metrics.lossRate,
@@ -81,11 +126,6 @@ export class TrafficStatsService {
         firstSalesDepartmentName,
         transferCount: dto.transferCount,
         addCount: dto.addCount,
-        depositCount: dto.depositCount,
-        tailCount: dto.tailCount,
-        fullCount: dto.fullCount,
-        timelyCount: dto.timelyCount,
-        totalPerformance: dto.totalPerformance,
       },
       update: {
         departmentId,
@@ -93,11 +133,6 @@ export class TrafficStatsService {
         firstSalesDepartmentName,
         transferCount: dto.transferCount,
         addCount: dto.addCount,
-        depositCount: dto.depositCount,
-        tailCount: dto.tailCount,
-        fullCount: dto.fullCount,
-        timelyCount: dto.timelyCount,
-        totalPerformance: dto.totalPerformance,
       },
       include: {
         user: {
@@ -113,7 +148,8 @@ export class TrafficStatsService {
       },
     })
 
-    return this.mapRow(item)
+    const crmStatsMap = await this.loadCrmStatsByUserDatePairs([{ userId: item.userId, reportDate: item.reportDate }])
+    return this.mapRow(item, crmStatsMap.get(this.buildUserDateKey(item.userId, item.reportDate)))
   }
 
   async findRows(currentUser: AuthenticatedUser, query: TrafficStatsQueryDto) {
@@ -138,56 +174,77 @@ export class TrafficStatsService {
       orderBy: [{ reportDate: 'desc' }, { createdAt: 'desc' }],
     })
 
+    const crmStatsMap = await this.loadCrmStatsByUserDatePairs(
+      items.map((item) => ({ userId: item.userId, reportDate: item.reportDate })),
+    )
+
     return {
-      rows: items.map((item) => this.mapRow(item)),
+      rows: items.map((item) => this.mapRow(item, crmStatsMap.get(this.buildUserDateKey(item.userId, item.reportDate)))),
     }
   }
 
   async getSummary(currentUser: AuthenticatedUser, query: TrafficStatsQueryDto) {
-    const where = await this.buildVisibilityWhere(currentUser, query.departmentId)
-    const groups = await this.prisma.trafficStat.groupBy({
-      by: ['reportDate'],
-      where: {
-        reportDate: this.buildDateFilter(query),
-        ...where,
-      },
-      _sum: {
-        transferCount: true,
-        addCount: true,
-        depositCount: true,
-        tailCount: true,
-        fullCount: true,
-        timelyCount: true,
-        totalPerformance: true,
-      },
-      orderBy: { reportDate: 'desc' },
-    })
+    const [manualGroups, crmGroups] = await Promise.all([
+      this.prisma.trafficStat.groupBy({
+        by: ['reportDate'],
+        where: {
+          reportDate: this.buildDateFilter(query),
+          ...(await this.buildVisibilityWhere(currentUser, query.departmentId)),
+        },
+        _sum: {
+          transferCount: true,
+          addCount: true,
+        },
+        orderBy: { reportDate: 'desc' },
+      }),
+      this.loadCrmStatsByDate(currentUser, query),
+    ])
 
-    const rows = groups.map((group) => {
-      const stats = this.normalizeStats({
-        transferCount: group._sum.transferCount,
-        addCount: group._sum.addCount,
-        depositCount: group._sum.depositCount,
-        tailCount: group._sum.tailCount,
-        fullCount: group._sum.fullCount,
-        timelyCount: group._sum.timelyCount,
-        totalPerformance: group._sum.totalPerformance,
+    const rowMap = new Map<string, TrafficStatSummaryRow>()
+    for (const group of manualGroups) {
+      const key = this.toDateKey(group.reportDate)
+      rowMap.set(key, {
+        date: key,
+        transferCount: group._sum.transferCount ?? 0,
+        addCount: group._sum.addCount ?? 0,
+        ...this.createEmptyCrmStats(),
       })
-      const metrics = this.buildMetrics(stats)
-      return {
-        date: this.toDateKey(group.reportDate),
-        transferCount: stats.transferCount,
-        addCount: stats.addCount,
-        depositCount: stats.depositCount,
-        tailCount: stats.tailCount,
-        fullCount: stats.fullCount,
-        timelyCount: stats.timelyCount,
-        totalPerformance: stats.totalPerformance,
-        depositConversionRate: metrics.depositConversionRate,
-        conversionRate: metrics.conversionRate,
-        lossRate: metrics.lossRate,
+    }
+
+    for (const [key, crmStats] of crmGroups.entries()) {
+      const current = rowMap.get(key) || {
+        date: key,
+        transferCount: 0,
+        addCount: 0,
+        ...this.createEmptyCrmStats(),
       }
-    })
+      current.depositCount = crmStats.depositCount
+      current.tailCount = crmStats.tailCount
+      current.fullCount = crmStats.fullCount
+      current.timelyCount = crmStats.timelyCount
+      current.totalPerformance = crmStats.totalPerformance
+      rowMap.set(key, current)
+    }
+
+    const rows = Array.from(rowMap.values())
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((item) => {
+        const stats = this.normalizeStats(item)
+        const metrics = this.buildMetrics(stats)
+        return {
+          date: item.date,
+          transferCount: stats.transferCount,
+          addCount: stats.addCount,
+          depositCount: stats.depositCount,
+          tailCount: stats.tailCount,
+          fullCount: stats.fullCount,
+          timelyCount: stats.timelyCount,
+          totalPerformance: stats.totalPerformance,
+          depositConversionRate: metrics.depositConversionRate,
+          conversionRate: metrics.conversionRate,
+          lossRate: metrics.lossRate,
+        }
+      })
 
     const totals = rows.reduce(
       (result, item) => {
@@ -240,8 +297,12 @@ export class TrafficStatsService {
     }))
   }
 
-  private mapRow(item: any) {
-    const stats = this.normalizeStats(item)
+  private mapRow(item: TrafficStatManualRow, crmStats?: TrafficStatCrmStats) {
+    const stats = this.normalizeStats({
+      transferCount: item.transferCount,
+      addCount: item.addCount,
+      ...crmStats,
+    })
     const metrics = this.buildMetrics(stats)
     return {
       id: item.id,
@@ -288,6 +349,16 @@ export class TrafficStatsService {
     }
   }
 
+  private createEmptyCrmStats(): TrafficStatCrmStats {
+    return {
+      depositCount: 0,
+      tailCount: 0,
+      fullCount: 0,
+      timelyCount: 0,
+      totalPerformance: 0,
+    }
+  }
+
   private buildMetrics(source?: {
     addCount?: number | null
     depositCount?: number | null
@@ -328,6 +399,10 @@ export class TrafficStatsService {
     return date.toISOString().slice(0, 10)
   }
 
+  private buildUserDateKey(userId: number, reportDate: Date) {
+    return `${userId}-${this.toDateKey(reportDate)}`
+  }
+
   private calculateRate(numerator: number, denominator: number) {
     if (!denominator) {
       return 0
@@ -363,6 +438,86 @@ export class TrafficStatsService {
         },
       },
     })
+  }
+
+  private async loadCrmStatsByUserDatePairs(pairs: Array<{ userId: number; reportDate: Date }>) {
+    const uniquePairs = Array.from(new Map(
+      pairs.map((item) => [this.buildUserDateKey(item.userId, item.reportDate), item]),
+    ).values())
+
+    if (!uniquePairs.length) {
+      return new Map<string, TrafficStatCrmStats>()
+    }
+
+    const userIds = Array.from(new Set(uniquePairs.map((item) => item.userId)))
+    const dateKeys = Array.from(new Set(uniquePairs.map((item) => this.toDateKey(item.reportDate))))
+    const minDateKey = dateKeys.reduce((min, value) => (value < min ? value : min), dateKeys[0])
+    const maxDateKey = dateKeys.reduce((max, value) => (value > max ? value : max), dateKeys[0])
+    const rangeEnd = new Date(maxDateKey)
+    rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 1)
+
+    const groups = await this.prisma.firstSalesOrder.groupBy({
+      by: ['salesUserId', 'orderDate', 'orderType', 'isTimelyDeal'],
+      where: {
+        salesUserId: { in: userIds },
+        orderDate: {
+          gte: new Date(minDateKey),
+          lt: rangeEnd,
+        },
+      },
+      _count: { _all: true },
+      _sum: { paymentAmount: true },
+      orderBy: [{ salesUserId: 'asc' }, { orderDate: 'asc' }],
+    })
+
+    const targetKeys = new Set(uniquePairs.map((item) => this.buildUserDateKey(item.userId, item.reportDate)))
+    const map = new Map<string, TrafficStatCrmStats>()
+    for (const group of groups) {
+      const key = this.buildUserDateKey(group.salesUserId, group.orderDate)
+      if (!targetKeys.has(key)) {
+        continue
+      }
+      const current = map.get(key) || this.createEmptyCrmStats()
+      const count = group._count._all
+      const amount = Number(group._sum.paymentAmount || 0)
+      if (group.isTimelyDeal) current.timelyCount += count
+      if (group.orderType === 'DEPOSIT') current.depositCount += count
+      if (group.orderType === 'TAIL') current.tailCount += count
+      if (group.orderType === 'FULL') current.fullCount += count
+      current.totalPerformance += amount
+      map.set(key, current)
+    }
+
+    return map
+  }
+
+  private async loadCrmStatsByDate(currentUser: AuthenticatedUser, query: TrafficStatsQueryDto) {
+    const groups = await this.prisma.firstSalesOrder.groupBy({
+      by: ['orderDate', 'orderType', 'isTimelyDeal'],
+      where: {
+        orderDate: this.buildDateFilter(query),
+        ...(await this.buildFirstSalesVisibilityWhere(currentUser, query.departmentId)),
+      },
+      _count: { _all: true },
+      _sum: { paymentAmount: true },
+      orderBy: { orderDate: 'desc' },
+    })
+
+    const map = new Map<string, TrafficStatCrmStats>()
+    for (const group of groups) {
+      const key = this.toDateKey(group.orderDate)
+      const current = map.get(key) || this.createEmptyCrmStats()
+      const count = group._count._all
+      const amount = Number(group._sum.paymentAmount || 0)
+      if (group.isTimelyDeal) current.timelyCount += count
+      if (group.orderType === 'DEPOSIT') current.depositCount += count
+      if (group.orderType === 'TAIL') current.tailCount += count
+      if (group.orderType === 'FULL') current.fullCount += count
+      current.totalPerformance += amount
+      map.set(key, current)
+    }
+
+    return map
   }
 
   private async buildVisibleDepartmentIds(currentUser: AuthenticatedUser): Promise<number[] | null> {
@@ -425,6 +580,24 @@ export class TrafficStatsService {
       departmentId: {
         in: filteredDepartmentIds,
       },
+    }
+  }
+
+  private async buildFirstSalesVisibilityWhere(currentUser: AuthenticatedUser, departmentId?: number): Promise<Prisma.FirstSalesOrderWhereInput> {
+    switch (currentUser.reportScope) {
+      case DataScope.ALL: {
+        const filteredDepartmentIds = departmentId ? [Number(departmentId)].filter(Number.isFinite) : null
+        return filteredDepartmentIds?.length ? { salesUser: { departmentId: { in: filteredDepartmentIds } } } : {}
+      }
+      case DataScope.SELF:
+        return { salesUserId: currentUser.id }
+      case DataScope.DEPARTMENT:
+      case DataScope.DEPARTMENT_AND_CHILDREN: {
+        const filteredDepartmentIds = await this.resolveFilteredDepartmentIds(currentUser, departmentId)
+        return filteredDepartmentIds?.length ? { salesUser: { departmentId: { in: filteredDepartmentIds } } } : { id: -1 }
+      }
+      default:
+        return { id: -1 }
     }
   }
 

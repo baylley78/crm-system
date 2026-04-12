@@ -15,29 +15,4 @@ export class SaveTrafficStatDto {
   @Min(0)
   @Type(() => Number)
   addCount: number
-
-  @IsNumber()
-  @Min(0)
-  @Type(() => Number)
-  depositCount: number
-
-  @IsNumber()
-  @Min(0)
-  @Type(() => Number)
-  tailCount: number
-
-  @IsNumber()
-  @Min(0)
-  @Type(() => Number)
-  fullCount: number
-
-  @IsNumber()
-  @Min(0)
-  @Type(() => Number)
-  timelyCount: number
-
-  @IsNumber()
-  @Min(0)
-  @Type(() => Number)
-  totalPerformance: number
 }
