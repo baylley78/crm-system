@@ -283,6 +283,43 @@ export class TrafficStatsService {
     }))
   }
 
+  async deleteTrafficStat(currentUser: AuthenticatedUser, id: number) {
+    const item = await this.prisma.trafficStat.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        userId: true,
+        departmentId: true,
+      },
+    })
+
+    if (!item) {
+      throw new ForbiddenException('来客统计不存在')
+    }
+
+    const where = await this.buildVisibilityWhere(currentUser)
+    if (where.userId !== undefined && where.userId !== item.userId) {
+      throw new ForbiddenException('无权删除该来客统计')
+    }
+
+    const departmentFilter = where.departmentId
+    if (
+      departmentFilter
+      && typeof departmentFilter === 'object'
+      && 'in' in departmentFilter
+      && Array.isArray(departmentFilter.in)
+      && !departmentFilter.in.includes(item.departmentId ?? -1)
+    ) {
+      throw new ForbiddenException('无权删除该来客统计')
+    }
+
+    await this.prisma.trafficStat.delete({
+      where: { id },
+    })
+
+    return { success: true }
+  }
+
   private mapRow(item: TrafficStatManualRow) {
     const stats = this.normalizeStats(item)
     const metrics = this.buildMetrics(stats)
