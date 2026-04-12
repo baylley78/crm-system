@@ -342,22 +342,22 @@ export class TrafficStatsService {
   }
 
   private buildMetrics(source?: {
+    transferCount?: number | null
     addCount?: number | null
     depositCount?: number | null
     tailCount?: number | null
     fullCount?: number | null
   } | null) {
+    const transferCount = source?.transferCount ?? 0
     const addCount = source?.addCount ?? 0
     const depositCount = source?.depositCount ?? 0
     const tailCount = source?.tailCount ?? 0
     const fullCount = source?.fullCount ?? 0
-    const convertedCount = depositCount + tailCount + fullCount
-    const lostCount = Math.max(addCount - convertedCount, 0)
 
     return {
-      depositConversionRate: this.calculateRate(depositCount, addCount),
-      conversionRate: this.calculateRate(convertedCount, addCount),
-      lossRate: this.calculateRate(lostCount, addCount),
+      depositConversionRate: this.calculateRate(depositCount, transferCount),
+      conversionRate: this.calculateRate(tailCount + fullCount, transferCount),
+      lossRate: transferCount ? Number((1 - addCount / transferCount).toFixed(4)) : 0,
     }
   }
 
