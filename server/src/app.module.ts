@@ -20,6 +20,7 @@ import { DingTalkReportModule } from './modules/dingtalk-report/dingtalk-report.
 import { FilesModule } from './modules/files/files.module';
 import { RefundModule } from './modules/refund/refund.module';
 import { JudicialComplaintsModule } from './modules/judicial-complaints/judicial-complaints.module';
+import { TrafficStatsModule } from './modules/traffic-stats/traffic-stats.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { JudicialComplaintsModule } from './modules/judicial-complaints/judicial
     FilesModule,
     RefundModule,
     JudicialComplaintsModule,
+    TrafficStatsModule,
   ],
 })
 export class AppModule {}

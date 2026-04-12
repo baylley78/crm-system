@@ -151,6 +151,7 @@ model Department {
   children     Department[] @relation("DepartmentTree")
   users        User[]
   refundCases  RefundCase[]
+  trafficStats TrafficStat[]
   leader       User?        @relation("DepartmentLeader", fields: [leaderUserId], references: [id])
   hrUser       User?        @relation("DepartmentHr", fields: [hrUserId], references: [id])
   createdAt    DateTime     @default(now())
@@ -247,6 +248,7 @@ model User {
   reviewedSecondSalesOrders SecondSalesOrder[] @relation("SecondSalesFinanceReviewer")
   reviewedThirdSalesOrders ThirdSalesOrder[] @relation("ThirdSalesFinanceReviewer")
   qualityRecords         QualityRecord[]
+  trafficStats          TrafficStat[]
   submittedComplaintCases JudicialComplaintCase[] @relation("ComplaintSubmittedBy")
   handledComplaintCases   JudicialComplaintCase[] @relation("ComplaintHandledBy")
   contractArchives       ContractArchive[] @relation("ContractSpecialist")
@@ -729,6 +731,23 @@ model QualityRecord {
   updatedAt     DateTime  @updatedAt
 
   @@index([customerId])
+}
+
+model TrafficStat {
+  id             Int        @id @default(autoincrement())
+  reportDate     DateTime
+  userId         Int
+  departmentId   Int?
+  transferCount  Int        @default(0)
+  receptionCount Int        @default(0)
+  user           User       @relation(fields: [userId], references: [id])
+  department     Department? @relation(fields: [departmentId], references: [id])
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@unique([reportDate, userId])
+  @@index([reportDate])
+  @@index([departmentId])
 }
 
 model ContractArchive {

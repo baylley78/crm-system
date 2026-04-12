@@ -41,6 +41,7 @@ const routes: RouteRecordRaw[] = [
       { path: '/oa/leaves', name: 'oa-leaves', component: () => import('../views/oa/LeaveApprovalView.vue'), meta: { permission: 'oa.approvals.view' } },
       { path: '/oa/punch-cards', name: 'oa-punch-cards', component: () => import('../views/oa/PunchCardApprovalView.vue'), meta: { permission: 'oa.approvals.view' } },
       { path: '/quality', name: 'quality', component: () => import('../views/quality/QualityManageView.vue'), meta: { permission: 'quality.view' } },
+      { path: '/traffic-stats', name: 'traffic-stats', component: () => import('../views/traffic-stats/TrafficStatsView.vue'), meta: { permission: 'trafficStats.view' } },
       { path: '/system/users', name: 'system-users', component: () => import('../views/system/UserManageView.vue'), meta: { permission: 'system.users.view' } },
       { path: '/system/departments', name: 'system-departments', component: () => import('../views/system/DepartmentManageView.vue'), meta: { permission: 'system.departments.view' } },
       { path: '/system/payment-accounts', name: 'system-payment-accounts', component: () => import('../views/system/PaymentAccountManageView.vue'), meta: { permission: 'system.paymentAccounts.manage' } },

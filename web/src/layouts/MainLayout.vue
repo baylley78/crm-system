@@ -136,6 +136,12 @@ const allMenus: MenuItem[] = [
     ],
   },
   {
+    title: '来客统计',
+    index: '/traffic-stats',
+    icon: markRaw(Histogram),
+    permission: hasAnyPermission(['trafficStats.submit', 'trafficStats.view']) ? undefined : '__hidden__',
+  },
+  {
     title: '系统管理',
     index: '/system',
     icon: markRaw(Setting),

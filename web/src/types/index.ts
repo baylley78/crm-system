@@ -381,6 +381,49 @@ export interface ReportOptionsResponse {
   options: ReportDepartmentOption[]
 }
 
+export interface TrafficStatItem {
+  id: number
+  reportDate: string
+  userId: number
+  userName: string
+  departmentId?: number
+  departmentName?: string
+  transferCount: number
+  receptionCount: number
+  conversionRate: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TrafficStatDailyForm {
+  reportDate: string
+  transferCount: number
+  receptionCount: number
+  conversionRate: number
+}
+
+export interface SaveTrafficStatPayload {
+  reportDate: string
+  transferCount: number
+  receptionCount: number
+}
+
+export interface TrafficStatSummaryRow {
+  date: string
+  transferCount: number
+  receptionCount: number
+  conversionRate: number
+}
+
+export interface TrafficStatSummaryResponse {
+  totals: {
+    transferCount: number
+    receptionCount: number
+    conversionRate: number
+  }
+  rows: TrafficStatSummaryRow[]
+}
+
 export interface ReportDetailRow {
   id: number
   customerName: string
