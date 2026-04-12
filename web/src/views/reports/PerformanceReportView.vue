@@ -146,33 +146,49 @@ const columns = computed(() => {
 const formatCurrency = (value: unknown) => `¥${Number(value || 0).toLocaleString('zh-CN')}`
 const formatPercent = (value: unknown) => `${(Number(value || 0) * 100).toFixed(2)}%`
 
-const syncDateRangeFilters = (start?: Date, end?: Date) => {
-  dateRange.value = start && end ? [start, end] : []
-  filters.startDate = start ? start.toISOString() : ''
-  filters.endDate = end ? end.toISOString() : ''
-}
+const buildQuickRange = (range: 'day' | 'week' | 'month') => {
+  const now = new Date()
+  const start = new Date(now)
+  const end = new Date(now)
 
-const applyQuickRange = async (range: 'day' | 'week' | 'month') => {
-  activeQuickRange.value = range
-  const end = new Date()
-  const start = new Date(end)
   if (range === 'day') {
     start.setHours(0, 0, 0, 0)
     end.setHours(23, 59, 59, 999)
   }
+
   if (range === 'week') {
-    const day = end.getDay() || 7
-    start.setDate(end.getDate() - day + 1)
+    const day = now.getDay() || 7
+    start.setDate(now.getDate() - day + 1)
     start.setHours(0, 0, 0, 0)
     end.setHours(23, 59, 59, 999)
   }
+
   if (range === 'month') {
     start.setDate(1)
     start.setHours(0, 0, 0, 0)
     end.setHours(23, 59, 59, 999)
   }
+
+  return { start, end }
+}
+
+const syncDateRangeFilters = (start?: Date, end?: Date, resetQuickRange = false) => {
+  dateRange.value = start && end ? [start, end] : []
+  filters.startDate = start ? start.toISOString() : ''
+  filters.endDate = end ? end.toISOString() : ''
+  if (resetQuickRange) {
+    activeQuickRange.value = ''
+  }
+}
+
+const applyQuickRange = async (range: 'day' | 'week' | 'month') => {
+  activeQuickRange.value = range
+  const { start, end } = buildQuickRange(range)
   syncDateRangeFilters(start, end)
-  await loadData()
+  await loadData({
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+  })
 }
 
 const loadDepartmentOptions = async () => {
@@ -180,13 +196,13 @@ const loadDepartmentOptions = async () => {
   departmentOptions.value = response.options
 }
 
-const loadData = async () => {
+const loadData = async (overrideParams?: ReportQueryParams) => {
   loading.value = true
   try {
     const params = {
-      startDate: filters.startDate || undefined,
-      endDate: filters.endDate || undefined,
-      departmentId: filters.departmentId,
+      startDate: overrideParams?.startDate ?? (filters.startDate || undefined),
+      endDate: overrideParams?.endDate ?? (filters.endDate || undefined),
+      departmentId: overrideParams?.departmentId ?? filters.departmentId,
     }
     const reportRows = await fetcher.value(params)
     rows.value = reportRows.rows as CurrentRow[]
@@ -196,9 +212,7 @@ const loadData = async () => {
 }
 
 watch(dateRange, (value) => {
-  filters.startDate = value[0] ? value[0].toISOString() : ''
-  filters.endDate = value[1] ? value[1].toISOString() : ''
-  activeQuickRange.value = ''
+  syncDateRangeFilters(value[0], value[1], true)
 })
 
 onMounted(async () => {
