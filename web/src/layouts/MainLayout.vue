@@ -35,7 +35,7 @@ const route = useRoute()
 const router = useRouter()
 const currentUser = computed(() => authStorage.getUser())
 
-const hasPermission = (permission?: string) => !permission || currentUser.value?.permissions?.includes(permission)
+const hasPermission = (permission?: string) => !permission || currentUser.value?.roleCode === 'SUPER_ADMIN' || currentUser.value?.permissions?.includes(permission)
 
 const allMenus: MenuItem[] = [
   {

@@ -1,5 +1,8 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { authStorage } from '../auth'
+import { fetchCurrentUser } from '../api/auth'
+
+const SUPER_ADMIN_ROLE_CODE = 'SUPER_ADMIN'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -56,19 +59,53 @@ const router = createRouter({
   routes,
 })
 
-const findFirstAccessibleRoute = (userPermissions: string[] = []) => {
+const findFirstAccessibleRoute = (userPermissions: string[] = [], roleCode?: string) => {
   return rootChildren.find((route) => {
     const permission = typeof route.meta?.permission === 'string' ? route.meta.permission : undefined
-    return !permission || userPermissions.includes(permission)
+    return !permission || roleCode === SUPER_ADMIN_ROLE_CODE || userPermissions.includes(permission)
   })
 }
 
-router.beforeEach((to) => {
+let currentUserRefreshPromise: Promise<void> | null = null
+
+const refreshCurrentUser = async () => {
   const token = authStorage.getToken()
-  const user = authStorage.getUser()
+  if (!token) {
+    return null
+  }
+
+  if (!currentUserRefreshPromise) {
+    currentUserRefreshPromise = fetchCurrentUser()
+      .then((user) => {
+        authStorage.setSession(token, user)
+      })
+      .catch(() => {
+        authStorage.clear()
+        throw new Error('CURRENT_USER_REFRESH_FAILED')
+      })
+      .finally(() => {
+        currentUserRefreshPromise = null
+      })
+  }
+
+  await currentUserRefreshPromise
+  return authStorage.getUser()
+}
+
+router.beforeEach(async (to) => {
+  const token = authStorage.getToken()
+  let user = authStorage.getUser()
+
+  if (token && to.path !== '/login') {
+    try {
+      user = (await refreshCurrentUser()) || user
+    } catch {
+      return '/login'
+    }
+  }
 
   if (to.path === '/login' && token) {
-    const fallback = findFirstAccessibleRoute(user?.permissions || [])
+    const fallback = findFirstAccessibleRoute(user?.permissions || [], user?.roleCode)
     return fallback?.path || '/login'
   }
 
@@ -77,8 +114,8 @@ router.beforeEach((to) => {
   }
 
   const requiredPermission = typeof to.meta.permission === 'string' ? to.meta.permission : undefined
-  if (requiredPermission && !user?.permissions?.includes(requiredPermission)) {
-    const fallback = findFirstAccessibleRoute(user?.permissions || [])
+  if (requiredPermission && user?.roleCode !== SUPER_ADMIN_ROLE_CODE && !user?.permissions?.includes(requiredPermission)) {
+    const fallback = findFirstAccessibleRoute(user?.permissions || [], user?.roleCode)
     if (!fallback) {
       authStorage.clear()
       return '/login'

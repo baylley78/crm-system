@@ -245,6 +245,16 @@ export class CustomersService {
     })
 
     if (!customer) {
+      const performanceFormVisibilityWhere = await this.buildPerformanceFormCustomerVisibilityWhere(currentUser)
+      const performanceFormCustomer = await this.findCustomerDetailByWhere({
+        id,
+        ...performanceFormVisibilityWhere,
+      })
+
+      if (performanceFormCustomer) {
+        return performanceFormCustomer
+      }
+
       const exists = await this.prisma.customer.findUnique({
         where: { id },
         select: { id: true },

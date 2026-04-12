@@ -273,7 +273,7 @@ export class SecondSalesService implements OnModuleInit {
     const customer = await this.prisma.customer.findFirst({
       where: {
         id: order.customerId,
-        ...(await this.customersService.buildCustomerVisibilityWhere(currentUser)),
+        ...(await this.customersService.buildPerformanceFormCustomerVisibilityWhere(currentUser)),
       },
     })
 
