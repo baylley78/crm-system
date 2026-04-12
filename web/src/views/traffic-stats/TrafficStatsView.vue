@@ -85,8 +85,12 @@ const loadForm = async () => {
     return
   }
 
-  const data = await fetchMyTrafficStat(form.reportDate)
-  applyFormData(data)
+  try {
+    const data = await fetchMyTrafficStat(form.reportDate)
+    applyFormData(data)
+  } catch (error: any) {
+    ElMessage.error(error?.message || '加载来客统计失败')
+  }
 }
 
 const openDrawer = async () => {
@@ -124,15 +128,17 @@ const loadStats = async () => {
 const submit = async () => {
   saving.value = true
   try {
-    await saveMyTrafficStat({
+    const data = await saveMyTrafficStat({
       reportDate: form.reportDate,
       transferCount: Number(form.transferCount || 0),
       addCount: Number(form.addCount || 0),
     })
-    ElMessage.success('来客统计已添加')
-    await loadForm()
+    ElMessage.success('来客统计已保存')
+    applyFormData(data)
     drawerVisible.value = false
     await loadStats()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '保存来客统计失败')
   } finally {
     saving.value = false
   }
