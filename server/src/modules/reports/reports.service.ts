@@ -120,6 +120,11 @@ export interface ThirdSalesTeamRow {
   dealAmount: number
 }
 
+type ReportBaseUser = {
+  id: number
+  realName: string
+}
+
 @Injectable()
 export class ReportsService {
   constructor(
@@ -196,54 +201,37 @@ export class ReportsService {
   }
 
   async getFirstSalesPersonal(currentUser: AuthenticatedUser, query: ReportQuery): Promise<{ rows: FirstSalesPersonalRow[] }> {
-    const where = {
-      orderDate: this.buildDateFilter(query),
-      ...(await this.buildFirstSalesVisibilityWhere(currentUser, query.departmentId)),
-    }
-    const trafficStatWhere = {
-      reportDate: this.buildDateFilter(query),
-      ...(await this.buildTrafficStatVisibilityWhere(currentUser, query.departmentId)),
-    }
-    const [groups, trafficStatGroups] = await Promise.all([
+    const [baseUsers, groups, trafficStatGroups] = await Promise.all([
+      this.findPersonalReportBaseUsers(currentUser, query.departmentId),
       this.prisma.firstSalesOrder.groupBy({
         by: ['salesUserId', 'orderType', 'isTimelyDeal'],
-        where,
+        where: {
+          orderDate: this.buildDateFilter(query),
+          ...(await this.buildFirstSalesVisibilityWhere(currentUser, query.departmentId)),
+        },
         _count: { _all: true },
         _sum: { paymentAmount: true },
         orderBy: { salesUserId: 'asc' },
       }),
       this.prisma.trafficStat.groupBy({
         by: ['userId'],
-        where: trafficStatWhere,
+        where: {
+          reportDate: this.buildDateFilter(query),
+          ...(await this.buildTrafficStatVisibilityWhere(currentUser, query.departmentId)),
+        },
         _sum: { transferCount: true, addCount: true },
         orderBy: { userId: 'asc' },
       }),
     ])
 
-    const salesUserIds = Array.from(new Set([...groups.map((item) => item.salesUserId), ...trafficStatGroups.map((item) => item.userId)]))
-    const users = salesUserIds.length
-      ? await this.prisma.user.findMany({
-          where: { id: { in: salesUserIds } },
-          select: { id: true, realName: true },
-        })
-      : []
-    const userNameMap = new Map(users.map((user) => [user.id, user.realName]))
+    const map = new Map<number, FirstSalesPersonalRow>(
+      baseUsers.map((user) => [user.id, this.createFirstSalesPersonalRow(user.realName)]),
+    )
 
-    const map = new Map<number, FirstSalesPersonalRow>()
     for (const group of groups) {
-      const current = map.get(group.salesUserId) || {
-        userName: userNameMap.get(group.salesUserId) || '',
-        transferCount: 0,
-        addCount: 0,
-        timelyCount: 0,
-        depositCount: 0,
-        tailCount: 0,
-        fullCount: 0,
-        depositAmount: 0,
-        tailAmount: 0,
-        fullAmount: 0,
-        totalAmount: 0,
-        avgAmount: 0,
+      const current = map.get(group.salesUserId)
+      if (!current) {
+        continue
       }
       const count = group._count._all
       const amount = Number(group._sum.paymentAmount || 0)
@@ -263,30 +251,18 @@ export class ReportsService {
       current.totalAmount += amount
       const totalCount = current.depositCount + current.tailCount + current.fullCount
       current.avgAmount = totalCount ? Number((current.totalAmount / totalCount).toFixed(2)) : 0
-      map.set(group.salesUserId, current)
     }
 
     for (const group of trafficStatGroups) {
-      const current = map.get(group.userId) || {
-        userName: userNameMap.get(group.userId) || '',
-        transferCount: 0,
-        addCount: 0,
-        timelyCount: 0,
-        depositCount: 0,
-        tailCount: 0,
-        fullCount: 0,
-        depositAmount: 0,
-        tailAmount: 0,
-        fullAmount: 0,
-        totalAmount: 0,
-        avgAmount: 0,
+      const current = map.get(group.userId)
+      if (!current) {
+        continue
       }
       current.transferCount = group._sum.transferCount ?? 0
       current.addCount = group._sum.addCount ?? 0
-      map.set(group.userId, current)
     }
 
-    return { rows: Array.from(map.values()).sort((a, b) => b.totalAmount - a.totalAmount || b.transferCount - a.transferCount) }
+    return { rows: Array.from(map.values()).sort((a, b) => b.totalAmount - a.totalAmount || a.userName.localeCompare(b.userName, 'zh-CN')) }
   }
 
   async getFirstSalesTeam(currentUser: AuthenticatedUser, query: ReportQuery): Promise<{ rows: FirstSalesTeamRow[] }> {
@@ -377,18 +353,13 @@ export class ReportsService {
   }
 
   async getSecondSalesPersonal(currentUser: AuthenticatedUser, query: ReportQuery): Promise<{ rows: SecondSalesPersonalRow[] }> {
-    const assignmentWhere = {
-      assignedAt: this.buildDateFilter(query),
-      ...(await this.buildSecondSalesAssignmentVisibilityWhere(currentUser, query.departmentId)),
-    }
-    const orderWhere = {
-      orderDate: this.buildDateFilter(query),
-      ...(await this.buildSecondSalesVisibilityWhere(currentUser, query.departmentId)),
-    }
-
-    const [assignments, orderGroups, distinctDeals] = await Promise.all([
+    const [baseUsers, assignments, orderGroups, distinctDeals] = await Promise.all([
+      this.findPersonalReportBaseUsers(currentUser, query.departmentId),
       this.prisma.secondSalesAssignment.findMany({
-        where: assignmentWhere,
+        where: {
+          assignedAt: this.buildDateFilter(query),
+          ...(await this.buildSecondSalesAssignmentVisibilityWhere(currentUser, query.departmentId)),
+        },
         select: {
           secondSalesUserId: true,
           customer: {
@@ -401,64 +372,48 @@ export class ReportsService {
       }),
       this.prisma.secondSalesOrder.groupBy({
         by: ['secondSalesUserId'],
-        where: orderWhere,
+        where: {
+          orderDate: this.buildDateFilter(query),
+          ...(await this.buildSecondSalesVisibilityWhere(currentUser, query.departmentId)),
+        },
         _sum: { performanceAmount: true },
         orderBy: { secondSalesUserId: 'asc' },
       }),
       this.prisma.secondSalesOrder.findMany({
-        where: orderWhere,
+        where: {
+          orderDate: this.buildDateFilter(query),
+          ...(await this.buildSecondSalesVisibilityWhere(currentUser, query.departmentId)),
+        },
         select: { secondSalesUserId: true, customerId: true },
         distinct: ['secondSalesUserId', 'customerId'],
       }),
     ])
 
-    const userIds = Array.from(new Set([...assignments.map((item) => item.secondSalesUserId), ...orderGroups.map((item) => item.secondSalesUserId)]))
-    const users = userIds.length
-      ? await this.prisma.user.findMany({
-          where: { id: { in: userIds } },
-          select: { id: true, realName: true },
-        })
-      : []
-    const userNameMap = new Map(users.map((user) => [user.id, user.realName]))
     const dealCountMap = new Map<number, number>()
     for (const item of distinctDeals) {
       dealCountMap.set(item.secondSalesUserId, (dealCountMap.get(item.secondSalesUserId) || 0) + 1)
     }
 
-    const map = new Map<number, SecondSalesPersonalRow>()
+    const map = new Map<number, SecondSalesPersonalRow>(
+      baseUsers.map((user) => [user.id, this.createSecondSalesPersonalRow(user.realName)]),
+    )
+
     for (const assignment of assignments) {
-      const current = map.get(assignment.secondSalesUserId) || {
-        userName: userNameMap.get(assignment.secondSalesUserId) || '',
-        receptionCount: 0,
-        targetAmount: 0,
-        dealCount: 0,
-        dealAmount: 0,
-        conversionRate: 0,
-        avgAmount: 0,
-        unitQ: 0,
+      const current = map.get(assignment.secondSalesUserId)
+      if (!current) {
+        continue
       }
       current.receptionCount += 1
       current.targetAmount += Number(assignment.customer.targetAmount || 0)
-      map.set(assignment.secondSalesUserId, current)
     }
 
     for (const group of orderGroups) {
-      const current = map.get(group.secondSalesUserId) || {
-        userName: userNameMap.get(group.secondSalesUserId) || '',
-        receptionCount: 0,
-        targetAmount: 0,
-        dealCount: 0,
-        dealAmount: 0,
-        conversionRate: 0,
-        avgAmount: 0,
-        unitQ: 0,
+      const current = map.get(group.secondSalesUserId)
+      if (!current) {
+        continue
       }
       current.dealAmount = Number(group._sum.performanceAmount || 0)
       current.dealCount = dealCountMap.get(group.secondSalesUserId) || 0
-      current.conversionRate = current.receptionCount ? Number((current.dealCount / current.receptionCount).toFixed(4)) : 0
-      current.avgAmount = current.dealCount ? Number((current.dealAmount / current.dealCount).toFixed(2)) : 0
-      current.unitQ = current.receptionCount ? Number((current.dealAmount / current.receptionCount).toFixed(2)) : 0
-      map.set(group.secondSalesUserId, current)
     }
 
     for (const current of map.values()) {
@@ -467,7 +422,7 @@ export class ReportsService {
       current.unitQ = current.receptionCount ? Number((current.dealAmount / current.receptionCount).toFixed(2)) : 0
     }
 
-    return { rows: Array.from(map.values()).sort((a, b) => b.dealAmount - a.dealAmount) }
+    return { rows: Array.from(map.values()).sort((a, b) => b.dealAmount - a.dealAmount || a.userName.localeCompare(b.userName, 'zh-CN')) }
   }
 
   async getSecondSalesTeam(currentUser: AuthenticatedUser, query: ReportQuery): Promise<{ rows: SecondSalesTeamRow[] }> {
@@ -570,31 +525,33 @@ export class ReportsService {
   }
 
   async getThirdSalesPersonal(currentUser: AuthenticatedUser, query: ReportQuery): Promise<{ rows: ThirdSalesPersonalRow[] }> {
-    const where = {
-      orderDate: this.buildDateFilter(query),
-      ...(await this.buildThirdSalesVisibilityWhere(currentUser, query.departmentId)),
-    }
-    const groups = await this.prisma.thirdSalesOrder.groupBy({
-      by: ['thirdSalesUserId'],
-      where,
-      _sum: { performanceAmount: true },
-      orderBy: { _sum: { performanceAmount: 'desc' } },
-    })
+    const [baseUsers, groups] = await Promise.all([
+      this.findPersonalReportBaseUsers(currentUser, query.departmentId),
+      this.prisma.thirdSalesOrder.groupBy({
+        by: ['thirdSalesUserId'],
+        where: {
+          orderDate: this.buildDateFilter(query),
+          ...(await this.buildThirdSalesVisibilityWhere(currentUser, query.departmentId)),
+        },
+        _sum: { performanceAmount: true },
+        orderBy: { _sum: { performanceAmount: 'desc' } },
+      }),
+    ])
 
-    const userIds = groups.map((item) => item.thirdSalesUserId)
-    const users = userIds.length
-      ? await this.prisma.user.findMany({
-          where: { id: { in: userIds } },
-          select: { id: true, realName: true },
-        })
-      : []
-    const userNameMap = new Map(users.map((user) => [user.id, user.realName]))
+    const map = new Map<number, ThirdSalesPersonalRow>(
+      baseUsers.map((user) => [user.id, this.createThirdSalesPersonalRow(user.realName)]),
+    )
+
+    for (const group of groups) {
+      const current = map.get(group.thirdSalesUserId)
+      if (!current) {
+        continue
+      }
+      current.dealAmount = Number(group._sum.performanceAmount || 0)
+    }
 
     return {
-      rows: groups.map((group) => ({
-        userName: userNameMap.get(group.thirdSalesUserId) || '',
-        dealAmount: Number(group._sum.performanceAmount || 0),
-      })),
+      rows: Array.from(map.values()).sort((a, b) => b.dealAmount - a.dealAmount || a.userName.localeCompare(b.userName, 'zh-CN')),
     }
   }
 
@@ -615,6 +572,64 @@ export class ReportsService {
         dealAmount: Number(group._sum.performanceAmount || 0),
       })),
     }
+  }
+
+  private createFirstSalesPersonalRow(userName: string): FirstSalesPersonalRow {
+    return {
+      userName,
+      transferCount: 0,
+      addCount: 0,
+      timelyCount: 0,
+      depositCount: 0,
+      tailCount: 0,
+      fullCount: 0,
+      depositAmount: 0,
+      tailAmount: 0,
+      fullAmount: 0,
+      totalAmount: 0,
+      avgAmount: 0,
+    }
+  }
+
+  private createSecondSalesPersonalRow(userName: string): SecondSalesPersonalRow {
+    return {
+      userName,
+      receptionCount: 0,
+      targetAmount: 0,
+      dealCount: 0,
+      dealAmount: 0,
+      conversionRate: 0,
+      avgAmount: 0,
+      unitQ: 0,
+    }
+  }
+
+  private createThirdSalesPersonalRow(userName: string): ThirdSalesPersonalRow {
+    return {
+      userName,
+      dealAmount: 0,
+    }
+  }
+
+  private async findPersonalReportBaseUsers(currentUser: AuthenticatedUser, departmentId?: string): Promise<ReportBaseUser[]> {
+    if (currentUser.reportScope === DataScope.SELF) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: currentUser.id },
+        select: { id: true, realName: true },
+      })
+      return user ? [user] : []
+    }
+
+    const departmentIds = await this.resolveFilteredDepartmentIds(currentUser, departmentId)
+    if (departmentIds && !departmentIds.length) {
+      return []
+    }
+
+    return this.prisma.user.findMany({
+      where: departmentIds ? { departmentId: { in: departmentIds } } : undefined,
+      select: { id: true, realName: true },
+      orderBy: [{ realName: 'asc' }, { id: 'asc' }],
+    })
   }
 
   private buildDateFilter(query: ReportQuery) {

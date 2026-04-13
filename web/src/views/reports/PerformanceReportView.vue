@@ -62,7 +62,10 @@ const filters = reactive<ReportQueryParams>({
 const dateRange = ref<[Date, Date] | []>([])
 const rows = ref<CurrentRow[]>([])
 const departmentOptions = ref<ReportDepartmentOption[]>([])
-const activeQuickRange = ref<'day' | 'week' | 'month' | ''>('')
+type PersonalQuickRange = 'day' | 'week' | 'month'
+type TeamQuickRange = 'month' | 'year'
+type QuickRange = PersonalQuickRange | TeamQuickRange
+const activeQuickRange = ref<QuickRange | ''>('')
 
 const fetcher = computed(() => {
   if (props.stage === 'first-sales' && props.scope === 'personal') return fetchFirstSalesPersonal
@@ -74,6 +77,18 @@ const fetcher = computed(() => {
 })
 
 const summaryTitle = computed(() => (props.scope === 'personal' ? '个人统计' : '团队统计'))
+const quickRangeButtons = computed(() => (
+  props.scope === 'personal'
+    ? [
+        { key: 'day' as const, label: '日' },
+        { key: 'week' as const, label: '周' },
+        { key: 'month' as const, label: '月' },
+      ]
+    : [
+        { key: 'month' as const, label: '月度' },
+        { key: 'year' as const, label: '年度' },
+      ]
+))
 
 const columns = computed(() => {
   if (props.stage === 'first-sales' && props.scope === 'personal') {
@@ -147,7 +162,7 @@ const columns = computed(() => {
 const formatCurrency = (value: unknown) => `¥${Number(value || 0).toLocaleString('zh-CN')}`
 const formatPercent = (value: unknown) => `${(Number(value || 0) * 100).toFixed(2)}%`
 
-const buildQuickRange = (range: 'day' | 'week' | 'month') => {
+const buildPersonalQuickRange = (range: PersonalQuickRange) => {
   const now = new Date()
   const start = new Date(now)
   const end = new Date(now)
@@ -167,6 +182,29 @@ const buildQuickRange = (range: 'day' | 'week' | 'month') => {
   if (range === 'month') {
     start.setDate(1)
     start.setHours(0, 0, 0, 0)
+    end.setMonth(now.getMonth() + 1, 0)
+    end.setHours(23, 59, 59, 999)
+  }
+
+  return { start, end }
+}
+
+const buildTeamQuickRange = (range: TeamQuickRange) => {
+  const now = new Date()
+  const start = new Date(now)
+  const end = new Date(now)
+
+  if (range === 'month') {
+    start.setDate(1)
+    start.setHours(0, 0, 0, 0)
+    end.setMonth(now.getMonth() + 1, 0)
+    end.setHours(23, 59, 59, 999)
+  }
+
+  if (range === 'year') {
+    start.setMonth(0, 1)
+    start.setHours(0, 0, 0, 0)
+    end.setMonth(11, 31)
     end.setHours(23, 59, 59, 999)
   }
 
@@ -179,9 +217,11 @@ const syncDateRangeFilters = (start?: Date, end?: Date) => {
   filters.endDate = end ? end.toISOString() : ''
 }
 
-const applyQuickRange = async (range: 'day' | 'week' | 'month') => {
+const applyQuickRange = async (range: QuickRange) => {
   activeQuickRange.value = range
-  const { start, end } = buildQuickRange(range)
+  const { start, end } = props.scope === 'personal'
+    ? buildPersonalQuickRange(range as PersonalQuickRange)
+    : buildTeamQuickRange(range as TeamQuickRange)
   syncDateRangeFilters(start, end)
   await loadData({
     startDate: start.toISOString(),
@@ -234,9 +274,14 @@ onMounted(async () => {
       <el-form inline>
         <el-form-item label="快捷筛选">
           <el-space>
-            <el-button :type="activeQuickRange === 'day' ? 'primary' : 'default'" @click="applyQuickRange('day')">日</el-button>
-            <el-button :type="activeQuickRange === 'week' ? 'primary' : 'default'" @click="applyQuickRange('week')">周</el-button>
-            <el-button :type="activeQuickRange === 'month' ? 'primary' : 'default'" @click="applyQuickRange('month')">月</el-button>
+            <el-button
+              v-for="button in quickRangeButtons"
+              :key="button.key"
+              :type="activeQuickRange === button.key ? 'primary' : 'default'"
+              @click="applyQuickRange(button.key)"
+            >
+              {{ button.label }}
+            </el-button>
           </el-space>
         </el-form-item>
         <el-form-item label="销售部门">
