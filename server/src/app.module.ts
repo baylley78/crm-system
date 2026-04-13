@@ -21,6 +21,7 @@ import { FilesModule } from './modules/files/files.module';
 import { RefundModule } from './modules/refund/refund.module';
 import { JudicialComplaintsModule } from './modules/judicial-complaints/judicial-complaints.module';
 import { TrafficStatsModule } from './modules/traffic-stats/traffic-stats.module';
+import { InvalidLeadsModule } from './modules/invalid-leads/invalid-leads.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { TrafficStatsModule } from './modules/traffic-stats/traffic-stats.module
     RefundModule,
     JudicialComplaintsModule,
     TrafficStatsModule,
+    InvalidLeadsModule,
   ],
 })
 export class AppModule {}

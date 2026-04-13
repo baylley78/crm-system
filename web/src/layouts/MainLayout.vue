@@ -142,6 +142,12 @@ const allMenus: MenuItem[] = [
     permission: hasAnyPermission(['trafficStats.submit', 'trafficStats.view']) ? undefined : '__hidden__',
   },
   {
+    title: '无效客资',
+    index: '/invalid-leads',
+    icon: markRaw(Service),
+    permission: hasAnyPermission(['invalidLeads.submit', 'invalidLeads.view']) ? undefined : '__hidden__',
+  },
+  {
     title: '系统管理',
     index: '/system',
     icon: markRaw(Setting),

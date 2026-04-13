@@ -432,6 +432,24 @@ export interface SaveTrafficStatPayload {
   addCount: number
 }
 
+export interface InvalidLeadItem {
+  id: number
+  reportDate: string
+  phone: string
+  userId: number
+  userName: string
+  salesName: string
+  departmentId?: number
+  departmentName?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SaveInvalidLeadPayload {
+  reportDate: string
+  phone: string
+}
+
 export interface TrafficStatSummaryRow {
   date: string
   transferCount: number
