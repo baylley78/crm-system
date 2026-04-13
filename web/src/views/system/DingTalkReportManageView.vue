@@ -7,9 +7,11 @@ import type { DepartmentTreeItem, DingTalkReportConfigItem, DingTalkReportConfig
 
 const FIRST_SALES_TEMPLATE = '【一销报单】\n时间：{{orderTime}}\n客户姓名：{{customerName}}\n手机：{{maskedPhone}}\n业绩类型：{{orderType}}\n是否及时：{{isTimelyDeal}}\n付款金额：{{paymentAmount}}\n今日单量：{{dailyOrderCount}}\n今日总业绩：{{dailyPaymentAmount}}'
 const LITIGATION_TEMPLATE = '【{{stage}}】\n时间：{{orderTime}}\n客户姓名：{{customerName}}\n销售：{{salesName}}\n回款金额：{{paymentAmount}}\n实际业绩：{{performanceAmount}}\n今日目标：{{dailyTarget}}\n\n{{departmentName}}今日业绩播报：\n{{departmentDailyPerformanceLines}}\n\n今日二销合计：{{departmentDailyPerformanceTotal}}元'
+const TRAFFIC_STATS_TEMPLATE = '【销售日报/来客统计】\n日期：{{reportDate}}\n销售：{{salesName}}\n部门：{{departmentName}}\n团队：{{firstSalesTeamName}}\n转化人数：{{transferCount}}\n加微人数：{{addCount}}\n定金单数：{{depositCount}}\n尾款单数：{{tailCount}}\n全款单数：{{fullCount}}\n及时单数：{{timelyCount}}\n总业绩：{{totalPerformance}}\n定金率：{{depositConversionRate}}\n转化率：{{conversionRate}}\n流失率：{{lossRate}}'
 const TEMPLATE_TYPE_OPTIONS: Array<{ label: string; value: DingTalkReportTemplateType }> = [
   { label: '一销报单', value: 'FIRST_SALES' },
   { label: '二销/三销报单', value: 'LITIGATION' },
+  { label: '销售日报/来客统计', value: 'TRAFFIC_STATS' },
 ]
 
 const loading = ref(false)
@@ -19,7 +21,7 @@ const editingId = ref<number | null>(null)
 const keyword = ref('')
 const configs = ref<DingTalkReportConfigItem[]>([])
 const departmentOptions = ref<Array<{ id: number; name: string }>>([])
-const templateVariables = ['{{stage}}', '{{customerName}}', '{{phone}}', '{{maskedPhone}}', '{{salesName}}', '{{departmentName}}', '{{groupName}}', '{{teamName}}', '{{branchName}}', '{{paymentAmount}}', '{{performanceAmount}}', '{{orderTime}}', '{{orderType}}', '{{isTimelyDeal}}', '{{dailyOrderCount}}', '{{dailyPaymentAmount}}', '{{teamDailyPaymentAmount}}', '{{departmentDailyPerformanceLines}}', '{{departmentDailyPerformanceTotal}}', '{{dailyTarget}}']
+const templateVariables = ['{{stage}}', '{{customerName}}', '{{phone}}', '{{maskedPhone}}', '{{salesName}}', '{{departmentName}}', '{{groupName}}', '{{teamName}}', '{{branchName}}', '{{paymentAmount}}', '{{performanceAmount}}', '{{orderTime}}', '{{orderType}}', '{{isTimelyDeal}}', '{{dailyOrderCount}}', '{{dailyPaymentAmount}}', '{{teamDailyPaymentAmount}}', '{{departmentDailyPerformanceLines}}', '{{departmentDailyPerformanceTotal}}', '{{dailyTarget}}', '{{reportDate}}', '{{firstSalesTeamName}}', '{{firstSalesDepartmentName}}', '{{transferCount}}', '{{addCount}}', '{{depositCount}}', '{{tailCount}}', '{{fullCount}}', '{{timelyCount}}', '{{totalPerformance}}', '{{depositConversionRate}}', '{{conversionRate}}', '{{lossRate}}']
 
 const form = reactive<DingTalkReportConfigPayload>({
   templateType: 'FIRST_SALES',
@@ -43,11 +45,19 @@ const flattenDepartments = (nodes: DepartmentTreeItem[], prefix = ''): Array<{ i
 const templateTypeLabelMap: Record<DingTalkReportTemplateType, string> = {
   FIRST_SALES: '一销报单',
   LITIGATION: '二销/三销报单',
+  TRAFFIC_STATS: '销售日报/来客统计',
 }
 
 const getTemplateTypeLabel = (templateType: DingTalkReportTemplateType) => templateTypeLabelMap[templateType]
-const getDefaultTemplate = (templateType: DingTalkReportTemplateType) =>
-  templateType === 'FIRST_SALES' ? FIRST_SALES_TEMPLATE : LITIGATION_TEMPLATE
+const getDefaultTemplate = (templateType: DingTalkReportTemplateType) => {
+  if (templateType === 'FIRST_SALES') {
+    return FIRST_SALES_TEMPLATE
+  }
+  if (templateType === 'LITIGATION') {
+    return LITIGATION_TEMPLATE
+  }
+  return TRAFFIC_STATS_TEMPLATE
+}
 
 const loadConfigs = async () => {
   loading.value = true
@@ -177,7 +187,7 @@ onMounted(async () => {
           <div class="variable-list">
             <el-tag v-for="item in templateVariables" :key="item">{{ item }}</el-tag>
           </div>
-          <el-alert title="系统会在一销、二销、三销新增业绩后，按销售所属部门和模板类型匹配 webhook 并自动推送报单。一销模板支持时间、客户姓名、脱敏手机号、业绩类型、是否及时、今日单量、今日总业绩等变量；二销/三销模板支持部门成员今日业绩明细、今日二销合计和配置级今日目标变量。" type="info" :closable="false" show-icon />
+          <el-alert title="系统会在一销、二销、三销新增业绩后，或销售提交来客统计后，按所属部门和模板类型匹配 webhook 并自动推送报单。一销模板支持时间、客户姓名、脱敏手机号、业绩类型、是否及时、今日单量、今日总业绩等变量；二销/三销模板支持部门成员今日业绩明细、今日二销合计和配置级今日目标变量；销售日报/来客统计模板支持来客统计全部核心字段与转化率变量。" type="info" :closable="false" show-icon />
         </el-card>
 
         <el-card shadow="never">

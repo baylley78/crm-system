@@ -1,18 +1,21 @@
 <script setup lang="ts">
+import { Delete } from '@element-plus/icons-vue'
 import * as XLSX from 'xlsx'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { fetchInvalidLeadDepartments, fetchInvalidLeads, saveInvalidLead } from '../../api/invalid-leads'
+import { batchDeleteInvalidLeads, deleteInvalidLead, fetchInvalidLeadDepartments, fetchInvalidLeads, saveInvalidLead } from '../../api/invalid-leads'
 import type { InvalidLeadItem, ReportDepartmentOption, ReportQueryParams, SaveInvalidLeadPayload } from '../../types'
 import { hasPermission } from '../../utils/permissions'
 
 const canSubmit = computed(() => hasPermission('invalidLeads.submit'))
 const canView = computed(() => hasPermission('invalidLeads.view'))
+const canDelete = computed(() => hasPermission('invalidLeads.delete'))
 
 const loading = ref(false)
 const saving = ref(false)
 const drawerVisible = ref(false)
 const records = ref<InvalidLeadItem[]>([])
+const selectedRecordIds = ref<number[]>([])
 const departmentOptions = ref<ReportDepartmentOption[]>([])
 const dateRange = ref<[Date, Date] | []>([])
 const activeQuickRange = ref<'day' | 'week' | 'month' | ''>('')
@@ -116,6 +119,51 @@ const submit = async () => {
   }
 }
 
+const handleDelete = async (item: InvalidLeadItem) => {
+  await ElMessageBox.confirm(`确认删除 ${item.salesName || '该销售'} 在 ${item.reportDate} 提交的无效客资吗？删除后可重新提交。`, '删除无效客资', {
+    type: 'warning',
+    confirmButtonText: '确认删除',
+    cancelButtonText: '取消',
+  })
+
+  loading.value = true
+  try {
+    await deleteInvalidLead(item.id)
+    ElMessage.success('无效客资已删除')
+    selectedRecordIds.value = []
+    await loadRows()
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleSelectionChange = (rows: InvalidLeadItem[]) => {
+  selectedRecordIds.value = rows.map((item) => item.id)
+}
+
+const handleBatchDelete = async () => {
+  if (!selectedRecordIds.value.length) {
+    ElMessage.warning('请先选择无效客资')
+    return
+  }
+
+  await ElMessageBox.confirm(`确认批量删除已选 ${selectedRecordIds.value.length} 条无效客资吗？删除后可重新提交。`, '批量删除无效客资', {
+    type: 'warning',
+    confirmButtonText: '确认删除',
+    cancelButtonText: '取消',
+  })
+
+  loading.value = true
+  try {
+    await batchDeleteInvalidLeads(selectedRecordIds.value)
+    ElMessage.success('批量删除无效客资成功')
+    selectedRecordIds.value = []
+    await loadRows()
+  } finally {
+    loading.value = false
+  }
+}
+
 const resetFilters = async () => {
   filters.departmentId = undefined
   applyQuickRange('day')
@@ -207,8 +255,14 @@ onMounted(async () => {
       </el-card>
 
       <el-card shadow="never">
-        <template #header>明细列表</template>
-        <el-table :data="records">
+        <template #header>
+          <div class="card-header-row">
+            <span>明细列表</span>
+            <el-button v-if="canDelete" type="danger" :loading="loading" @click="handleBatchDelete">批量删除</el-button>
+          </div>
+        </template>
+        <el-table :data="records" @selection-change="handleSelectionChange">
+          <el-table-column v-if="canDelete" type="selection" width="55" />
           <el-table-column prop="reportDate" label="提交日期" min-width="120" />
           <el-table-column prop="phone" label="无效电话号码" min-width="160" />
           <el-table-column prop="salesName" label="提交销售" min-width="140" />
@@ -216,6 +270,13 @@ onMounted(async () => {
           <el-table-column label="提交时间" min-width="180">
             <template #default="scope">
               {{ formatDateTime(scope.row.createdAt) }}
+            </template>
+          </el-table-column>
+          <el-table-column v-if="canDelete" label="操作" fixed="right" width="80">
+            <template #default="scope">
+              <el-tooltip content="删除无效客资" placement="top">
+                <el-button link type="danger" :icon="Delete" @click="handleDelete(scope.row)" />
+              </el-tooltip>
             </template>
           </el-table-column>
         </el-table>

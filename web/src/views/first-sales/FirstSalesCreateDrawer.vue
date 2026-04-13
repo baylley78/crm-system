@@ -426,7 +426,7 @@ const submit = async () => {
 }
 
 watch(
-  () => [form.targetAmount, form.paymentAmount],
+  () => [form.contractAmount, form.paymentAmount],
   () => {
     syncAmounts()
   },
@@ -523,9 +523,10 @@ defineExpose({
               <el-radio label="false">否</el-radio>
             </el-radio-group>
           </el-form-item>
-          <el-form-item label="标的金额"><el-input v-model.number="form.targetAmount" placeholder="请输入案件标的金额" type="number" /></el-form-item>
+          <el-form-item label="标的金额"><el-input v-model.number="form.targetAmount" placeholder="请输入案件标的金额，不作为欠款金额" type="number" /></el-form-item>
           <el-form-item label="合同金额"><el-input v-model.number="form.contractAmount" placeholder="请输入合同金额" type="number" /></el-form-item>
           <el-form-item label="付款金额"><el-input v-model.number="form.paymentAmount" placeholder="请输入付款金额" type="number" /></el-form-item>
+          <el-form-item label="欠款金额"><el-input :model-value="form.arrearsAmount" disabled placeholder="系统自动计算：合同金额 - 付款金额" /></el-form-item>
           <el-form-item label="收款账户" class="full-width">
             <el-select v-model="form.paymentAccountId" placeholder="请选择收款账户" filterable>
               <el-option v-for="item in paymentAccounts" :key="item.id" :label="`${item.accountName}（${item.accountNo}）`" :value="item.id" />

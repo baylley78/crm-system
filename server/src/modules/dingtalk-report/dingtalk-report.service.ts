@@ -4,7 +4,7 @@ import { CreateDingTalkReportConfigDto } from './dto/create-dingtalk-report-conf
 import { UpdateDingTalkReportConfigDto } from './dto/update-dingtalk-report-config.dto'
 
 type PerformanceStage = '一销业绩' | '二销业绩' | '三销业绩'
-type DingTalkReportTemplateType = 'FIRST_SALES' | 'LITIGATION'
+type DingTalkReportTemplateType = 'FIRST_SALES' | 'LITIGATION' | 'TRAFFIC_STATS'
 
 type PerformanceNotificationPayload = {
   stage: PerformanceStage
@@ -27,6 +27,26 @@ type PerformanceNotificationPayload = {
   dailyPaymentAmount?: number
   departmentDailyPerformanceLines?: string
   departmentDailyPerformanceTotal?: number
+}
+
+type TrafficStatsNotificationPayload = {
+  templateType: 'TRAFFIC_STATS'
+  reportDate: string
+  salesName: string
+  departmentId?: number | null
+  departmentName?: string | null
+  firstSalesTeamName?: string | null
+  firstSalesDepartmentName?: string | null
+  transferCount: number
+  addCount: number
+  depositCount: number
+  tailCount: number
+  fullCount: number
+  timelyCount: number
+  totalPerformance: number
+  depositConversionRate: number
+  conversionRate: number
+  lossRate: number
 }
 
 @Injectable()
@@ -89,63 +109,18 @@ export class DingTalkReportService {
     }
 
     const templateType = this.resolveTemplateType(payload.stage)
-    const configs = await this.prisma.dingTalkReportConfig.findMany({
-      where: {
-        isActive: true,
-        templateType,
-      },
-      orderBy: [{ id: 'asc' }],
+    await this.notifyByTemplateType(templateType, payload.departmentId, `${payload.stage} / ${payload.customerName}`, payload, {
+      dailyTarget: undefined,
     })
+  }
 
-    const matchedConfigs = configs.filter((item) => this.parseNumberArray(item.departmentIds).includes(payload.departmentId!))
-    if (!matchedConfigs.length) {
-      this.logger.warn(`钉钉报单跳过：未匹配到配置 / ${payload.stage} / 部门${payload.departmentId} / ${payload.customerName}`)
+  async notifyTrafficStats(payload: TrafficStatsNotificationPayload) {
+    if (!payload.departmentId) {
+      this.logger.warn(`钉钉报单跳过：缺少部门ID / 销售日报/来客统计 / ${payload.salesName}`)
       return
     }
 
-    this.logger.log(`钉钉报单开始发送：${payload.stage} / 部门${payload.departmentId} / ${payload.customerName} / 命中${matchedConfigs.length}条配置`)
-
-    const contentByConfig = matchedConfigs.map((config) => ({
-      configId: config.id,
-      webhookUrl: config.webhookUrl,
-      content: this.renderTemplate(config.messageTemplate, payload, {
-        dailyTarget: config.dailyTarget,
-      }),
-    }))
-
-    await Promise.all(
-      contentByConfig.map(async (config) => {
-        if (!config.webhookUrl.trim()) {
-          this.logger.warn(`钉钉报单跳过：配置${config.configId} 未填写 webhook`)
-          return
-        }
-
-        try {
-          const response = await fetch(config.webhookUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              msgtype: 'text',
-              text: {
-                content: config.content,
-              },
-            }),
-          })
-
-          const responseText = await response.text()
-          if (!response.ok) {
-            this.logger.error(`钉钉报单发送失败：配置${config.configId} / HTTP ${response.status} ${response.statusText} / 响应: ${responseText}`)
-            return
-          }
-
-          this.logger.log(`钉钉报单发送完成：配置${config.configId} / 响应: ${responseText}`)
-        } catch (error) {
-          this.logger.error(`钉钉报单发送异常: ${payload.stage} / ${payload.customerName}`, error instanceof Error ? error.stack : String(error))
-        }
-      }),
-    )
+    await this.notifyByTemplateType(payload.templateType, payload.departmentId, `销售日报/来客统计 / ${payload.salesName} / ${payload.reportDate}`, payload)
   }
 
   async buildFirstSalesNotificationPayload(orderId: number) {
@@ -304,28 +279,94 @@ export class DingTalkReportService {
     }
   }
 
-  private renderTemplate(template: string, payload: PerformanceNotificationPayload, configValues?: { dailyTarget?: string | null }) {
+  async buildTrafficStatsNotificationPayload(trafficStatId: number) {
+    const item = await this.prisma.trafficStat.findUnique({
+      where: { id: trafficStatId },
+      include: {
+        user: {
+          include: {
+            departmentInfo: {
+              include: {
+                parent: true,
+              },
+            },
+          },
+        },
+        department: true,
+      },
+    })
+    if (!item) {
+      return null
+    }
+
+    const transferCount = item.transferCount ?? 0
+    const addCount = item.addCount ?? 0
+    const depositCount = item.depositCount ?? 0
+    const tailCount = item.tailCount ?? 0
+    const fullCount = item.fullCount ?? 0
+    const timelyCount = item.timelyCount ?? 0
+    const totalPerformance = Number(item.totalPerformance ?? 0)
+
+    return {
+      templateType: 'TRAFFIC_STATS' as const,
+      reportDate: this.toDateKey(item.reportDate),
+      salesName: item.user?.realName || '',
+      departmentId: item.departmentId ?? item.user?.departmentId,
+      departmentName: item.department?.name || item.user?.departmentInfo?.name || item.user?.department || '-',
+      firstSalesTeamName: item.firstSalesTeamName || item.user?.departmentInfo?.parent?.name || item.user?.departmentInfo?.name || item.user?.department || '-',
+      firstSalesDepartmentName: item.firstSalesDepartmentName || item.user?.departmentInfo?.name || item.user?.department || '-',
+      transferCount,
+      addCount,
+      depositCount,
+      tailCount,
+      fullCount,
+      timelyCount,
+      totalPerformance,
+      depositConversionRate: this.calculateRate(depositCount, transferCount),
+      conversionRate: this.calculateRate(tailCount + fullCount, transferCount),
+      lossRate: transferCount ? Number((1 - addCount / transferCount).toFixed(4)) : 0,
+    }
+  }
+
+  private renderTemplate(
+    template: string,
+    payload: PerformanceNotificationPayload | TrafficStatsNotificationPayload,
+    configValues?: { dailyTarget?: string | null },
+  ) {
     const values: Record<string, string> = {
-      stage: payload.stage,
-      customerName: payload.customerName,
-      phone: payload.phone,
-      maskedPhone: payload.maskedPhone || this.maskPhone(payload.phone),
+      stage: 'stage' in payload ? payload.stage : '销售日报/来客统计',
+      customerName: 'customerName' in payload ? payload.customerName : '-',
+      phone: 'phone' in payload ? payload.phone : '-',
+      maskedPhone: 'phone' in payload ? payload.maskedPhone || this.maskPhone(payload.phone) : '-',
       salesName: payload.salesName,
       departmentName: payload.departmentName || '-',
-      groupName: payload.groupName || payload.departmentName || '-',
-      teamName: payload.teamName || '-',
-      branchName: payload.branchName || '-',
-      paymentAmount: String(payload.paymentAmount),
-      performanceAmount: String(payload.performanceAmount),
-      orderTime: this.formatDateTime(payload.orderTime),
-      orderType: payload.orderType || '-',
-      isTimelyDeal: payload.isTimelyDeal || '-',
-      dailyOrderCount: String(payload.dailyOrderCount ?? 0),
-      dailyPaymentAmount: String(payload.dailyPaymentAmount ?? 0),
-      teamDailyPaymentAmount: String(payload.teamDailyPaymentAmount ?? 0),
-      departmentDailyPerformanceLines: payload.departmentDailyPerformanceLines || '-',
-      departmentDailyPerformanceTotal: String(payload.departmentDailyPerformanceTotal ?? 0),
+      groupName: 'groupName' in payload ? payload.groupName || payload.departmentName || '-' : payload.departmentName || '-',
+      teamName: 'teamName' in payload ? payload.teamName || '-' : '-',
+      branchName: 'branchName' in payload ? payload.branchName || '-' : '-',
+      paymentAmount: 'paymentAmount' in payload ? String(payload.paymentAmount) : '-',
+      performanceAmount: 'performanceAmount' in payload ? String(payload.performanceAmount) : '-',
+      orderTime: 'orderTime' in payload ? this.formatDateTime(payload.orderTime) : '-',
+      orderType: 'orderType' in payload ? payload.orderType || '-' : '-',
+      isTimelyDeal: 'isTimelyDeal' in payload ? payload.isTimelyDeal || '-' : '-',
+      dailyOrderCount: 'dailyOrderCount' in payload ? String(payload.dailyOrderCount ?? 0) : '0',
+      dailyPaymentAmount: 'dailyPaymentAmount' in payload ? String(payload.dailyPaymentAmount ?? 0) : '0',
+      teamDailyPaymentAmount: 'teamDailyPaymentAmount' in payload ? String(payload.teamDailyPaymentAmount ?? 0) : '0',
+      departmentDailyPerformanceLines: 'departmentDailyPerformanceLines' in payload ? payload.departmentDailyPerformanceLines || '-' : '-',
+      departmentDailyPerformanceTotal: 'departmentDailyPerformanceTotal' in payload ? String(payload.departmentDailyPerformanceTotal ?? 0) : '0',
       dailyTarget: configValues?.dailyTarget?.trim() || '-',
+      reportDate: 'reportDate' in payload ? payload.reportDate : '-',
+      firstSalesTeamName: 'firstSalesTeamName' in payload ? payload.firstSalesTeamName || '-' : '-',
+      firstSalesDepartmentName: 'firstSalesDepartmentName' in payload ? payload.firstSalesDepartmentName || '-' : '-',
+      transferCount: 'transferCount' in payload ? String(payload.transferCount) : '0',
+      addCount: 'addCount' in payload ? String(payload.addCount) : '0',
+      depositCount: 'depositCount' in payload ? String(payload.depositCount) : '0',
+      tailCount: 'tailCount' in payload ? String(payload.tailCount) : '0',
+      fullCount: 'fullCount' in payload ? String(payload.fullCount) : '0',
+      timelyCount: 'timelyCount' in payload ? String(payload.timelyCount) : '0',
+      totalPerformance: 'totalPerformance' in payload ? String(payload.totalPerformance) : '0',
+      depositConversionRate: 'depositConversionRate' in payload ? String(payload.depositConversionRate) : '0',
+      conversionRate: 'conversionRate' in payload ? String(payload.conversionRate) : '0',
+      lossRate: 'lossRate' in payload ? String(payload.lossRate) : '0',
     }
 
     return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key: string) => values[key] || '')
@@ -362,7 +403,80 @@ export class DingTalkReportService {
   }
 
   private normalizeTemplateType(value: string): DingTalkReportTemplateType {
-    return value === 'LITIGATION' ? 'LITIGATION' : 'FIRST_SALES'
+    if (value === 'LITIGATION') {
+      return 'LITIGATION'
+    }
+    if (value === 'TRAFFIC_STATS') {
+      return 'TRAFFIC_STATS'
+    }
+    return 'FIRST_SALES'
+  }
+
+  private async notifyByTemplateType(
+    templateType: DingTalkReportTemplateType,
+    departmentId: number,
+    logLabel: string,
+    payload: PerformanceNotificationPayload | TrafficStatsNotificationPayload,
+    configValues?: { dailyTarget?: string | null },
+  ) {
+    const configs = await this.prisma.dingTalkReportConfig.findMany({
+      where: {
+        isActive: true,
+        templateType,
+      },
+      orderBy: [{ id: 'asc' }],
+    })
+
+    const matchedConfigs = configs.filter((item) => this.parseNumberArray(item.departmentIds).includes(departmentId))
+    if (!matchedConfigs.length) {
+      this.logger.warn(`钉钉报单跳过：未匹配到配置 / ${logLabel} / 部门${departmentId}`)
+      return
+    }
+
+    this.logger.log(`钉钉报单开始发送：${logLabel} / 部门${departmentId} / 命中${matchedConfigs.length}条配置`)
+
+    const contentByConfig = matchedConfigs.map((config) => ({
+      configId: config.id,
+      webhookUrl: config.webhookUrl,
+      content: this.renderTemplate(config.messageTemplate, payload, {
+        dailyTarget: config.dailyTarget,
+        ...configValues,
+      }),
+    }))
+
+    await Promise.all(
+      contentByConfig.map(async (config) => {
+        if (!config.webhookUrl.trim()) {
+          this.logger.warn(`钉钉报单跳过：配置${config.configId} 未填写 webhook`)
+          return
+        }
+
+        try {
+          const response = await fetch(config.webhookUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              msgtype: 'text',
+              text: {
+                content: config.content,
+              },
+            }),
+          })
+
+          const responseText = await response.text()
+          if (!response.ok) {
+            this.logger.error(`钉钉报单发送失败：配置${config.configId} / HTTP ${response.status} ${response.statusText} / 响应: ${responseText}`)
+            return
+          }
+
+          this.logger.log(`钉钉报单发送完成：配置${config.configId} / 响应: ${responseText}`)
+        } catch (error) {
+          this.logger.error(`钉钉报单发送异常: ${logLabel}`, error instanceof Error ? error.stack : String(error))
+        }
+      }),
+    )
   }
 
   private maskPhone(phone: string) {
@@ -483,6 +597,17 @@ export class DingTalkReportService {
 
   private formatAmount(amount: number) {
     return Number.isInteger(amount) ? String(amount) : String(amount)
+  }
+
+  private calculateRate(numerator: number, denominator: number) {
+    if (!denominator) {
+      return 0
+    }
+    return Number((numerator / denominator).toFixed(4))
+  }
+
+  private toDateKey(date: Date) {
+    return date.toISOString().slice(0, 10)
   }
 
   private formatDateTime(date: Date) {

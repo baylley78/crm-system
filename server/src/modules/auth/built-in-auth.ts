@@ -99,6 +99,7 @@ export const BUILT_IN_PERMISSION_DEFINITIONS: BuiltInPermissionDefinition[] = [
   { code: 'trafficStats.delete', name: '删除来客接待统计' },
   { code: 'invalidLeads.submit', name: '提交无效客资' },
   { code: 'invalidLeads.view', name: '查看无效客资' },
+  { code: 'invalidLeads.delete', name: '删除无效客资' },
   { code: 'system.users.view', name: '查看用户' },
   { code: 'system.users.create', name: '新增用户' },
   { code: 'system.users.edit', name: '编辑用户' },
@@ -198,7 +199,7 @@ const legalManagerExtraPermissionCodes = ['legal.assign', 'legal.filing.review',
 const mediationPermissionCodes = ['mediation.view', 'mediation.edit', 'mediation.return', 'mediation.complete', 'mediation.time.edit', 'refund.create']
 const qualityPermissionCodes = ['quality.view', 'quality.create']
 const trafficStatsPermissionCodes = ['trafficStats.submit', 'trafficStats.view', 'trafficStats.delete']
-const invalidLeadsPermissionCodes = ['invalidLeads.submit', 'invalidLeads.view']
+const invalidLeadsPermissionCodes = ['invalidLeads.submit', 'invalidLeads.view', 'invalidLeads.delete']
 const oaPermissionCodes = ['oa.approvals.view', 'oa.approvals.create', 'oa.approvals.review', 'oa.approvals.pay']
 const contractPermissionCodes = ['contracts.view', 'contracts.create']
 const refundManagerPermissionCodes = ['refund.view', 'refund.create', 'refund.review', 'refund.assign', 'refund.edit', 'refund.close', 'refund.department.edit', 'refund.delete', 'quality.view']
@@ -254,6 +255,7 @@ const managementPermissionCodes = [
   'refund.delete',
   'invalidLeads.submit',
   'invalidLeads.view',
+  'invalidLeads.delete',
 ]
 
 export const BUILT_IN_ROLE_DEFINITIONS: BuiltInRoleDefinition[] = [

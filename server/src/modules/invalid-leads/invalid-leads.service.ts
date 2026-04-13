@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common'
 import { DataScope, Prisma } from '@prisma/client'
 import { PrismaService } from '../../prisma/prisma.service'
 import type { AuthenticatedUser } from '../auth/auth.service'
@@ -109,6 +109,65 @@ export class InvalidLeadsService {
       id: item.id,
       name: this.buildDepartmentPath(item.id, itemMap),
     }))
+  }
+
+  async deleteInvalidLead(currentUser: AuthenticatedUser, id: number) {
+    const result = await this.deleteInvalidLeads(currentUser, [id])
+    return { success: result.success }
+  }
+
+  async deleteInvalidLeads(currentUser: AuthenticatedUser, ids: number[]) {
+    const targetIds = Array.from(new Set(ids.filter((id) => Number.isInteger(id) && id > 0)))
+    if (!targetIds.length) {
+      throw new ForbiddenException('请选择要删除的无效客资')
+    }
+
+    const items = await this.prisma.invalidLead.findMany({
+      where: { id: { in: targetIds } },
+      select: {
+        id: true,
+        userId: true,
+        departmentId: true,
+      },
+    })
+
+    if (items.length !== targetIds.length) {
+      throw new ForbiddenException('部分无效客资不存在或已删除')
+    }
+
+    const where = await this.buildVisibilityWhere(currentUser)
+    for (const item of items) {
+      this.ensureInvalidLeadDeletable(where, item)
+    }
+
+    const result = await this.prisma.invalidLead.deleteMany({
+      where: { id: { in: targetIds } },
+    })
+
+    return {
+      success: true,
+      count: result.count,
+    }
+  }
+
+  private ensureInvalidLeadDeletable(
+    where: Prisma.InvalidLeadWhereInput,
+    item: { userId: number; departmentId: number | null },
+  ) {
+    if (where.userId !== undefined && where.userId !== item.userId) {
+      throw new ForbiddenException('无权删除该无效客资')
+    }
+
+    const departmentFilter = where.departmentId
+    if (
+      departmentFilter
+      && typeof departmentFilter === 'object'
+      && 'in' in departmentFilter
+      && Array.isArray(departmentFilter.in)
+      && !departmentFilter.in.includes(item.departmentId ?? -1)
+    ) {
+      throw new ForbiddenException('无权删除该无效客资')
+    }
   }
 
   private mapRow(item: InvalidLeadRow) {

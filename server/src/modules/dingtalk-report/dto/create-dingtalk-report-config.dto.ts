@@ -3,8 +3,8 @@ import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, 
 
 export class CreateDingTalkReportConfigDto {
   @IsString()
-  @IsIn(['FIRST_SALES', 'LITIGATION'])
-  templateType: 'FIRST_SALES' | 'LITIGATION'
+  @IsIn(['FIRST_SALES', 'LITIGATION', 'TRAFFIC_STATS'])
+  templateType: 'FIRST_SALES' | 'LITIGATION' | 'TRAFFIC_STATS'
 
   @IsArray()
   @ArrayMinSize(1)

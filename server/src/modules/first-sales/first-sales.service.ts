@@ -54,9 +54,9 @@ export class FirstSalesService implements OnModuleInit {
 
     const paymentAccount = await this.paymentAccountsService.ensureAvailable(dto.paymentAccountId)
     const paymentAmount = Number(dto.paymentAmount)
-    const arrearsAmount = Number(dto.arrearsAmount)
     const contractAmount = Number(dto.contractAmount)
     const targetAmount = Number(dto.targetAmount)
+    const arrearsAmount = this.calculateArrearsAmount(contractAmount, paymentAmount)
     const isTimelyDeal = dto.isTimelyDeal === 'true'
     const orderType = dto.orderType as keyof typeof FirstOrderTypeDto
     const paymentScreenshotUrl = files.paymentScreenshot ? `/uploads/${files.paymentScreenshot.filename}` : undefined
@@ -190,7 +190,8 @@ export class FirstSalesService implements OnModuleInit {
     await this.paymentSerialValidatorService.ensureUnique(dto.paymentSerialNo)
     const paymentAmount = Number(dto.paymentAmount)
     const targetAmount = Number(dto.targetAmount)
-    const arrearsAmount = Number(dto.arrearsAmount)
+    const contractAmount = Number(dto.contractAmount)
+    const arrearsAmount = this.calculateArrearsAmount(contractAmount, paymentAmount)
     const isTimelyDeal = dto.isTimelyDeal === 'true'
     const paymentScreenshotUrl = files.paymentScreenshot ? `/uploads/${files.paymentScreenshot.filename}` : undefined
     const chatRecordUrl = files.chatRecordFile ? `/uploads/${files.chatRecordFile.filename}` : undefined
@@ -219,7 +220,7 @@ export class FirstSalesService implements OnModuleInit {
       orderType: FirstOrderTypeDto.TAIL,
       isTimelyDeal,
       targetAmount,
-      contractAmount: Number(dto.contractAmount),
+      contractAmount,
       paymentAmount,
       arrearsAmount,
       paymentAccountId: paymentAccount.id,
@@ -282,9 +283,9 @@ export class FirstSalesService implements OnModuleInit {
 
     const paymentAccount = await this.paymentAccountsService.ensureAvailable(dto.paymentAccountId)
     const paymentAmount = Number(dto.paymentAmount)
-    const arrearsAmount = Number(dto.arrearsAmount)
     const contractAmount = Number(dto.contractAmount)
     const targetAmount = Number(dto.targetAmount)
+    const arrearsAmount = this.calculateArrearsAmount(contractAmount, paymentAmount)
     const isTimelyDeal = dto.isTimelyDeal === 'true'
     const orderType = dto.orderType as keyof typeof FirstOrderTypeDto
     const paymentScreenshotUrl = files.paymentScreenshot ? `/uploads/${files.paymentScreenshot.filename}` : order.paymentScreenshotUrl
@@ -942,6 +943,10 @@ export class FirstSalesService implements OnModuleInit {
         remark: params.remark,
       },
     })
+  }
+
+  private calculateArrearsAmount(contractAmount: number, paymentAmount: number) {
+    return Math.max(Number((contractAmount - paymentAmount).toFixed(2)), 0)
   }
 
   private resolveCustomerStatus(arrearsAmount: number): CustomerStatus {

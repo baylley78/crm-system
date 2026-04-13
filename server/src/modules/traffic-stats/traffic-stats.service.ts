@@ -1,8 +1,9 @@
-import { ForbiddenException, Injectable } from '@nestjs/common'
+import { ForbiddenException, Injectable, Logger } from '@nestjs/common'
 import { DataScope, Prisma } from '@prisma/client'
 import { PrismaService } from '../../prisma/prisma.service'
 import type { AuthenticatedUser } from '../auth/auth.service'
 import { DepartmentsService } from '../departments/departments.service'
+import { DingTalkReportService } from '../dingtalk-report/dingtalk-report.service'
 import { SaveTrafficStatDto } from './dto/save-traffic-stat.dto'
 import { TrafficStatsQueryDto } from './dto/traffic-stats-query.dto'
 
@@ -62,9 +63,12 @@ type TrafficStatSummaryRow = {
 
 @Injectable()
 export class TrafficStatsService {
+  private readonly logger = new Logger(TrafficStatsService.name)
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly departmentsService: DepartmentsService,
+    private readonly dingTalkReportService: DingTalkReportService,
   ) {}
 
   async getMyDailyStat(currentUser: AuthenticatedUser, date?: string) {
@@ -164,6 +168,15 @@ export class TrafficStatsService {
         department: true,
       },
     })
+
+    try {
+      const notificationPayload = await this.dingTalkReportService.buildTrafficStatsNotificationPayload(item.id)
+      if (notificationPayload) {
+        await this.dingTalkReportService.notifyTrafficStats(notificationPayload)
+      }
+    } catch (error) {
+      this.logger.error(`来客统计钉钉推送失败: 用户${currentUser.id} / ${this.toDateKey(reportDate)}`, error instanceof Error ? error.stack : String(error))
+    }
 
     return this.mapRow(item)
   }

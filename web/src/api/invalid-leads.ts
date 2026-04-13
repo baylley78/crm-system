@@ -17,6 +17,16 @@ export const fetchInvalidLeadDepartments = async () => {
   return data
 }
 
+export const deleteInvalidLead = async (id: number) => {
+  const { data } = await request.delete<{ success: boolean }>(`/invalid-leads/${id}`)
+  return data
+}
+
+export const batchDeleteInvalidLeads = async (ids: number[]) => {
+  const { data } = await request.post<{ success: boolean; count: number }>('/invalid-leads/batch-delete', { ids })
+  return data
+}
+
 export const saveInvalidLead = async (payload: SaveInvalidLeadPayload) => {
   const { data } = await request.post<InvalidLeadItem>('/invalid-leads', payload)
   return data

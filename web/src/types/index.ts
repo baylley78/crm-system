@@ -1158,7 +1158,7 @@ export interface CourtConfigPayload {
   remark?: string
 }
 
-export type DingTalkReportTemplateType = 'FIRST_SALES' | 'LITIGATION'
+export type DingTalkReportTemplateType = 'FIRST_SALES' | 'LITIGATION' | 'TRAFFIC_STATS'
 
 export interface DingTalkReportConfigItem {
   id: number
