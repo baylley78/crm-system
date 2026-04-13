@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { hasPermission } from '../../utils/permissions'
 import {
   fetchFirstSalesPersonal,
@@ -62,9 +62,11 @@ const filters = reactive<ReportQueryParams>({
 const dateRange = ref<[Date, Date] | []>([])
 const rows = ref<CurrentRow[]>([])
 const departmentOptions = ref<ReportDepartmentOption[]>([])
-type PersonalQuickRange = 'day' | 'week' | 'month'
+const isFirstSalesPersonal = computed(() => props.stage === 'first-sales' && props.scope === 'personal')
+type FirstSalesPersonalQuickRange = 'day' | 'month'
+type GenericPersonalQuickRange = 'day' | 'week' | 'month'
 type TeamQuickRange = 'month' | 'year'
-type QuickRange = PersonalQuickRange | TeamQuickRange
+type QuickRange = FirstSalesPersonalQuickRange | GenericPersonalQuickRange | TeamQuickRange
 const activeQuickRange = ref<QuickRange | ''>('')
 
 const fetcher = computed(() => {
@@ -76,24 +78,34 @@ const fetcher = computed(() => {
   return fetchThirdSalesTeam
 })
 
+const defaultQuickRange = computed<QuickRange>(() => (props.scope === 'team' ? 'month' : 'day'))
 const summaryTitle = computed(() => (props.scope === 'personal' ? '个人统计' : '团队统计'))
-const quickRangeButtons = computed(() => (
-  props.scope === 'personal'
-    ? [
-        { key: 'day' as const, label: '日' },
-        { key: 'week' as const, label: '周' },
-        { key: 'month' as const, label: '月' },
-      ]
-    : [
-        { key: 'month' as const, label: '月度' },
-        { key: 'year' as const, label: '年度' },
-      ]
-))
+const quickRangeButtons = computed(() => {
+  if (props.scope === 'team') {
+    return [
+      { key: 'month' as const, label: '月度' },
+      { key: 'year' as const, label: '年度' },
+    ]
+  }
+
+  if (isFirstSalesPersonal.value) {
+    return [
+      { key: 'day' as const, label: '日' },
+      { key: 'month' as const, label: '月' },
+    ]
+  }
+
+  return [
+    { key: 'day' as const, label: '日' },
+    { key: 'week' as const, label: '周' },
+    { key: 'month' as const, label: '月' },
+  ]
+})
 
 const columns = computed(() => {
   if (props.stage === 'first-sales' && props.scope === 'personal') {
     return [
-      { key: 'userName', label: '人员名字' },
+      { key: 'userName', label: '销售' },
       { key: 'transferCount', label: '转入' },
       { key: 'addCount', label: '添加' },
       { key: 'timelyCount', label: '及时' },
@@ -162,7 +174,7 @@ const columns = computed(() => {
 const formatCurrency = (value: unknown) => `¥${Number(value || 0).toLocaleString('zh-CN')}`
 const formatPercent = (value: unknown) => `${(Number(value || 0) * 100).toFixed(2)}%`
 
-const buildPersonalQuickRange = (range: PersonalQuickRange) => {
+const buildPersonalQuickRange = (range: GenericPersonalQuickRange) => {
   const now = new Date()
   const start = new Date(now)
   const end = new Date(now)
@@ -217,21 +229,13 @@ const syncDateRangeFilters = (start?: Date, end?: Date) => {
   filters.endDate = end ? end.toISOString() : ''
 }
 
-const applyQuickRange = async (range: QuickRange) => {
-  activeQuickRange.value = range
-  const { start, end } = props.scope === 'personal'
-    ? buildPersonalQuickRange(range as PersonalQuickRange)
-    : buildTeamQuickRange(range as TeamQuickRange)
-  syncDateRangeFilters(start, end)
-  await loadData({
-    startDate: start.toISOString(),
-    endDate: end.toISOString(),
-  })
-  initialized.value = true
-}
-const loadDepartmentOptions = async () => {
-  const response = await fetchReportDepartments(props.stage)
-  departmentOptions.value = response.options
+const resetViewState = () => {
+  initialized.value = false
+  rows.value = []
+  departmentOptions.value = []
+  filters.departmentId = undefined
+  activeQuickRange.value = ''
+  syncDateRangeFilters()
 }
 
 const loadData = async (overrideParams?: ReportQueryParams) => {
@@ -249,20 +253,48 @@ const loadData = async (overrideParams?: ReportQueryParams) => {
   }
 }
 
+const applyQuickRange = async (range: QuickRange) => {
+  activeQuickRange.value = range
+  const { start, end } = props.scope === 'team'
+    ? buildTeamQuickRange(range as TeamQuickRange)
+    : buildPersonalQuickRange(range as GenericPersonalQuickRange)
+  syncDateRangeFilters(start, end)
+  await loadData({
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+    departmentId: filters.departmentId,
+  })
+  initialized.value = true
+}
+
+const loadDepartmentOptions = async () => {
+  const response = await fetchReportDepartments(props.stage)
+  departmentOptions.value = response.options
+}
+
+const initializeReport = async () => {
+  resetViewState()
+  if (!canViewCurrentReport.value) {
+    return
+  }
+
+  await loadDepartmentOptions()
+  await applyQuickRange(defaultQuickRange.value)
+}
+
 watch(dateRange, (value) => {
   filters.startDate = value[0] ? value[0].toISOString() : ''
   filters.endDate = value[1] ? value[1].toISOString() : ''
   activeQuickRange.value = ''
 })
 
-onMounted(async () => {
-  if (!canViewCurrentReport.value) {
-    return
-  }
-
-  await loadDepartmentOptions()
-  await applyQuickRange(props.scope === 'personal' ? 'day' : 'month')
-})
+watch(
+  () => [props.stage, props.scope] as const,
+  () => {
+    initializeReport()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>

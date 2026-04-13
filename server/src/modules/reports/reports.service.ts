@@ -201,13 +201,14 @@ export class ReportsService {
   }
 
   async getFirstSalesPersonal(currentUser: AuthenticatedUser, query: ReportQuery): Promise<{ rows: FirstSalesPersonalRow[] }> {
+    const stageDepartmentIds = await this.resolveStageScopedDepartmentIds(currentUser, 'first-sales', query.departmentId)
     const [baseUsers, groups, trafficStatGroups] = await Promise.all([
-      this.findPersonalReportBaseUsers(currentUser, query.departmentId),
+      this.findPersonalReportBaseUsers(currentUser, query.departmentId, 'first-sales'),
       this.prisma.firstSalesOrder.groupBy({
         by: ['salesUserId', 'orderType', 'isTimelyDeal'],
         where: {
           orderDate: this.buildDateFilter(query),
-          ...(await this.buildFirstSalesVisibilityWhere(currentUser, query.departmentId)),
+          ...(await this.buildFirstSalesVisibilityWhere(currentUser, query.departmentId, stageDepartmentIds)),
         },
         _count: { _all: true },
         _sum: { paymentAmount: true },
@@ -217,7 +218,7 @@ export class ReportsService {
         by: ['userId'],
         where: {
           reportDate: this.buildDateFilter(query),
-          ...(await this.buildTrafficStatVisibilityWhere(currentUser, query.departmentId)),
+          ...(await this.buildTrafficStatVisibilityWhere(currentUser, query.departmentId, stageDepartmentIds)),
         },
         _sum: { transferCount: true, addCount: true },
         orderBy: { userId: 'asc' },
@@ -611,7 +612,7 @@ export class ReportsService {
     }
   }
 
-  private async findPersonalReportBaseUsers(currentUser: AuthenticatedUser, departmentId?: string): Promise<ReportBaseUser[]> {
+  private async findPersonalReportBaseUsers(currentUser: AuthenticatedUser, departmentId?: string, stage?: ReportStage): Promise<ReportBaseUser[]> {
     if (currentUser.reportScope === DataScope.SELF) {
       const user = await this.prisma.user.findUnique({
         where: { id: currentUser.id },
@@ -620,7 +621,9 @@ export class ReportsService {
       return user ? [user] : []
     }
 
-    const departmentIds = await this.resolveFilteredDepartmentIds(currentUser, departmentId)
+    const departmentIds = stage
+      ? await this.resolveStageScopedDepartmentIds(currentUser, stage, departmentId)
+      : await this.resolveFilteredDepartmentIds(currentUser, departmentId)
     if (departmentIds && !departmentIds.length) {
       return []
     }
@@ -630,6 +633,29 @@ export class ReportsService {
       select: { id: true, realName: true },
       orderBy: [{ realName: 'asc' }, { id: 'asc' }],
     })
+  }
+
+  private async resolveStageScopedDepartmentIds(currentUser: AuthenticatedUser, stage: ReportStage, departmentId?: string): Promise<number[] | null> {
+    if (currentUser.reportScope === DataScope.SELF) {
+      return null
+    }
+
+    const visibleDepartmentIds = await this.buildVisibleDepartmentIds(currentUser)
+    const tree = await this.departmentsService.findTree()
+    const stageDepartmentIds = this.collectStageDepartmentIdsFromTree(tree, REPORT_STAGE_TEAM_ROOTS[stage])
+    const allowedStageDepartmentIds = visibleDepartmentIds
+      ? stageDepartmentIds.filter((id) => visibleDepartmentIds.includes(id))
+      : stageDepartmentIds
+
+    if (departmentId) {
+      const targetId = Number(departmentId)
+      if (!Number.isFinite(targetId)) {
+        return []
+      }
+      return allowedStageDepartmentIds.includes(targetId) ? [targetId] : []
+    }
+
+    return allowedStageDepartmentIds
   }
 
   private buildDateFilter(query: ReportQuery) {
@@ -736,17 +762,21 @@ export class ReportsService {
     return visibleDepartmentIds.includes(targetId) ? [targetId] : []
   }
 
-  private async buildFirstSalesVisibilityWhere(currentUser: AuthenticatedUser, departmentId?: string): Promise<Prisma.FirstSalesOrderWhereInput> {
+  private async buildFirstSalesVisibilityWhere(
+    currentUser: AuthenticatedUser,
+    departmentId?: string,
+    scopedDepartmentIds?: number[] | null,
+  ): Promise<Prisma.FirstSalesOrderWhereInput> {
     switch (currentUser.reportScope) {
       case DataScope.ALL: {
-        const filteredDepartmentIds = departmentId ? [Number(departmentId)].filter(Number.isFinite) : null
+        const filteredDepartmentIds = scopedDepartmentIds ?? (departmentId ? [Number(departmentId)].filter(Number.isFinite) : null)
         return filteredDepartmentIds?.length ? { salesUser: { departmentId: { in: filteredDepartmentIds } } } : {}
       }
       case DataScope.SELF:
         return { salesUserId: currentUser.id }
       case DataScope.DEPARTMENT:
       case DataScope.DEPARTMENT_AND_CHILDREN: {
-        const departmentIds = await this.resolveFilteredDepartmentIds(currentUser, departmentId)
+        const departmentIds = scopedDepartmentIds ?? await this.resolveFilteredDepartmentIds(currentUser, departmentId)
         return departmentIds ? { salesUser: { departmentId: { in: departmentIds } } } : { id: -1 }
       }
       default:
@@ -754,17 +784,21 @@ export class ReportsService {
     }
   }
 
-  private async buildTrafficStatVisibilityWhere(currentUser: AuthenticatedUser, departmentId?: string): Promise<Prisma.TrafficStatWhereInput> {
+  private async buildTrafficStatVisibilityWhere(
+    currentUser: AuthenticatedUser,
+    departmentId?: string,
+    scopedDepartmentIds?: number[] | null,
+  ): Promise<Prisma.TrafficStatWhereInput> {
     switch (currentUser.reportScope) {
       case DataScope.ALL: {
-        const filteredDepartmentIds = departmentId ? [Number(departmentId)].filter(Number.isFinite) : null
+        const filteredDepartmentIds = scopedDepartmentIds ?? (departmentId ? [Number(departmentId)].filter(Number.isFinite) : null)
         return filteredDepartmentIds?.length ? { departmentId: { in: filteredDepartmentIds } } : {}
       }
       case DataScope.SELF:
         return { userId: currentUser.id }
       case DataScope.DEPARTMENT:
       case DataScope.DEPARTMENT_AND_CHILDREN: {
-        const departmentIds = await this.resolveFilteredDepartmentIds(currentUser, departmentId)
+        const departmentIds = scopedDepartmentIds ?? await this.resolveFilteredDepartmentIds(currentUser, departmentId)
         return departmentIds ? { departmentId: { in: departmentIds } } : { id: -1 }
       }
       default:
